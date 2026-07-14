@@ -14,9 +14,7 @@ import {
   GitCompareArrows,
   ShoppingCart,
   Store,
-  ShieldCheck,
   LogOut,
-  LogIn,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -152,7 +150,7 @@ function EbLogo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 // ── Component ───────────────────────────────────────────────────────────────
 
 export default function AppShell() {
-  const [tab, setTab] = useState<TabId>('home')
+  const [tab, setTab] = useState<TabId>('conta')
   const [session, setSession] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -171,9 +169,11 @@ export default function AppShell() {
           status: data.status,
           photoURL: data.photoURL,
         })
-        // Auto-navigate to conta after login
+        // After login, navigate to home (admin/mercado will see their panel via conta tab)
         if (data.tipo === 'admin' || data.tipo === 'mercado') {
           setTab('conta')
+        } else if (data.tipo === 'usuario') {
+          setTab('home')
         }
       } else {
         setSession(null)
@@ -197,7 +197,7 @@ export default function AppShell() {
       /* ignore */
     }
     setSession(null)
-    setTab('home')
+    setTab('conta')
     toast.success('Sessão encerrada')
   }, [])
 
@@ -275,8 +275,8 @@ export default function AppShell() {
   return (
     <SessionCtx.Provider value={session}>
       <div className="min-h-screen flex flex-col bg-gray-50">
-        {/* ── Header ──────────────────────────────────────────────────── */}
-        <header className="bg-gradient-to-r from-red-600 to-orange-500 text-white sticky top-0 z-50 shadow-md">
+        {/* ── Header (desktop only — mobile uses bottom nav) ──────────── */}
+        <header className="hidden lg:block bg-gradient-to-r from-red-600 to-orange-500 text-white sticky top-0 z-50 shadow-md">
           <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <EbLogo size="sm" />
@@ -288,7 +288,7 @@ export default function AppShell() {
             <div className="flex items-center gap-2">
               {session ? (
                 <>
-                  <span className="text-xs hidden sm:inline opacity-90 truncate max-w-[160px]">
+                  <span className="text-xs opacity-90 truncate max-w-[160px]">
                     {session.tipo === 'admin'
                       ? 'Administrador'
                       : session.tipo === 'mercado'
@@ -304,22 +304,12 @@ export default function AppShell() {
                     <LogOut className="h-4 w-4" />
                   </Button>
                 </>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setTab('conta')}
-                  className="text-white hover:bg-white/20 h-8 px-3 gap-1.5"
-                >
-                  <LogIn className="h-4 w-4" />
-                  <span className="hidden sm:inline text-sm">Entrar</span>
-                </Button>
-              )}
+              ) : null}
             </div>
           </div>
 
           {/* Desktop horizontal tabs */}
-          <nav className="hidden lg:block border-t border-white/20">
+          <nav className="border-t border-white/20">
             <div className="max-w-6xl mx-auto px-4 flex gap-1">
               {visibleTabs.map((t) => (
                 <button
@@ -339,41 +329,6 @@ export default function AppShell() {
               ))}
             </div>
           </nav>
-
-          {/* Mobile dropdown menu */}
-          <AnimatePresence>
-            {mobileMenuOpen && (
-              <motion.nav
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="lg:hidden overflow-hidden border-t border-white/20"
-              >
-                <div className="px-4 py-2 flex flex-col gap-1">
-                  {visibleTabs.map((t) => (
-                    <button
-                      key={t.key}
-                      onClick={() => {
-                        setTab(t.key)
-                        setMobileMenuOpen(false)
-                      }}
-                      className={cn(
-                        'px-4 py-2.5 text-sm font-medium text-left rounded-md transition-colors',
-                        tab === t.key
-                          ? 'bg-white/20 text-white'
-                          : 'text-white/80 hover:bg-white/10 hover:text-white',
-                      )}
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        {t.icon} {t.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </motion.nav>
-            )}
-          </AnimatePresence>
         </header>
 
         {/* ── Main Content ────────────────────────────────────────────── */}

@@ -147,24 +147,33 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
   const handleSocialLogin = async (provider: 'google') => {
     setSocialLoading(provider)
     try {
-      const { getAuth, signInWithPopup, GoogleAuthProvider } = await import('firebase/auth')
+      const { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider } = await import('firebase/auth')
       const auth = getAuth()
+
+      // Check if we're returning from a redirect
+      const result = await getRedirectResult(auth)
+      if (result) {
+        const user = result.user
+        await api('/api/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            provider,
+            tipoLogin: 'pf',
+          }),
+        })
+        toast.success('Login com Google realizado!')
+        onLogin()
+        return
+      }
+
+      // No redirect result — initiate redirect flow
       const prov = new GoogleAuthProvider()
-      const result = await signInWithPopup(auth, prov)
-      const user = result.user
-      await api('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          provider,
-          tipoLogin: 'pf',
-        }),
-      })
-      toast.success('Login com Google realizado!')
-      onLogin()
+      await signInWithRedirect(auth, prov)
+      // Page will redirect — on return, getRedirectResult will handle it
     } catch (err: any) {
       if (err.code === 'auth/popup-closed-by-user') return
       toast.error(err?.message || 'Erro ao logar com Google')
