@@ -236,7 +236,6 @@ export default function AppShell() {
             sessionId={sessionId}
             onAddToList={handleAddToList}
             onPainelMercado={() => setTab('mercado')}
-            onPainelAdmin={() => setTab('admin')}
           />
         )
       case 'comparar':
@@ -245,15 +244,12 @@ export default function AppShell() {
         return <MyListView sessionId={sessionId} />
       case 'mercado':
         return <MarketPanel onLogout={handleLogout} onLogin={checkAuth} />
-      case 'admin':
-        return <AdminPanel onLogout={handleLogout} onLogin={checkAuth} />
       default:
         return (
           <HomeView
             sessionId={sessionId}
             onAddToList={handleAddToList}
             onPainelMercado={() => setTab('mercado')}
-            onPainelAdmin={() => setTab('admin')}
           />
         )
     }

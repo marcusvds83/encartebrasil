@@ -12,7 +12,6 @@ import {
   ChevronRight,
   Star,
   Store,
-  ShieldCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -510,10 +509,9 @@ interface HomeViewProps {
     mercadoNome?: string | null
   }) => void
   onPainelMercado?: () => void
-  onPainelAdmin?: () => void
 }
 
-export default function HomeView({ sessionId, onAddToList, onPainelMercado, onPainelAdmin }: HomeViewProps) {
+export default function HomeView({ sessionId, onAddToList, onPainelMercado }: HomeViewProps) {
   const [mercados, setMercados] = useState<MercadoSummary[]>([])
   const [destaques, setDestaques] = useState<MercadoSummary[]>([])
   const [search, setSearch] = useState('')
@@ -584,25 +582,17 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado, onPa
 
   return (
     <div className="space-y-5">
-      {/* Quick access para Painéis (Mercado/Admin) — visível para todos */}
-      <div className="flex gap-2">
+      {/* Botão Painel do Mercado — visível para todos */}
+      {onPainelMercado && (
         <button
           type="button"
-          onClick={() => onPainelMercado?.()}
-          className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 to-orange-500 text-white text-sm font-semibold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+          onClick={() => onPainelMercado()}
+          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 to-orange-500 text-white text-sm font-semibold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-shadow"
         >
           <Store className="h-4 w-4" />
           Painel do Mercado (CNPJ)
         </button>
-        <button
-          type="button"
-          onClick={() => onPainelAdmin?.()}
-          className="flex-1 flex items-center justify-center gap-2 bg-white border border-orange-200 text-red-700 text-sm font-semibold py-2.5 px-4 rounded-xl shadow-sm hover:bg-orange-50 transition-colors"
-        >
-          <ShieldCheck className="h-4 w-4" />
-          Painel Admin
-        </button>
-      </div>
+      )}
 
       {/* Search + Filter */}
       <div className="flex flex-col sm:flex-row gap-3">
