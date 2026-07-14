@@ -72,8 +72,13 @@ export async function GET(req: NextRequest) {
         },
       },
     })
-  } catch (e) {
+  } catch (e: any) {
     console.error('[setup] erro:', e)
-    return NextResponse.json({ erro: 'Erro no setup: ' + String(e) }, { status: 500 })
+    return NextResponse.json({
+      erro: 'Erro no setup',
+      message: e?.message || String(e),
+      code: e?.code || null,
+      stack: e?.stack?.split('\n').slice(0, 5) || null,
+    }, { status: 500 })
   }
 }
