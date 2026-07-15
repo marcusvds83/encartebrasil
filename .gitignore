@@ -28,4 +28,5 @@ apk-project/build/
 skills/
 upload/
 download/
-tool-results/
+tool-results/dist-static/
+next.config.static.ts
