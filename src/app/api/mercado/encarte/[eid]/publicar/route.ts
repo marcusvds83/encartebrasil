@@ -60,9 +60,11 @@ export async function POST(
       extracaoLog: `Publicação concluída. ${salvos} produto(s) salvo(s).`,
     })
 
-    // Notifica o mercado por e-mail (fire-and-forget)
+    // Notifica o mercado por e-mail (fire-and-forget, loga resultado)
     if (salvos > 0 && session.email) {
-      emailEncartePublicado(session.nome || 'Mercado', session.email, encarte.titulo, salvos).catch(() => {})
+      emailEncartePublicado(session.nome || 'Mercado', session.email, encarte.titulo, salvos).then((ok) => {
+        console.log(`[publicar] email notificacao: ${ok ? 'ENVIADO' : 'FALHOU'}`)
+      })
     }
 
     return NextResponse.json({ ok: true, totalSalvos: salvos })

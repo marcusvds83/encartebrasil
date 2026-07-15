@@ -58,8 +58,10 @@ export async function POST(req: NextRequest) {
     const res = NextResponse.json({ ok: true, tipo: 'usuario', ...data })
     res.cookies.set(cookie)
 
-    // Envia e-mail de boas-vindas (fire-and-forget)
-    emailBoasVindasConsumidor(nome || '', email).catch(() => {})
+    // Envia e-mail de boas-vindas (fire-and-forget, loga resultado)
+    emailBoasVindasConsumidor(nome || '', email).then((ok) => {
+      console.log(`[cadastro] email boas-vindas consumidor: ${ok ? 'ENVIADO' : 'FALHOU'}`)
+    })
 
     return res
   } catch (e) {

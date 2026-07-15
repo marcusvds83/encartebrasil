@@ -91,6 +91,8 @@ interface BIWeek {
 
 interface BIData {
   topProdutos: BITopProduto[]
+  totalVisualizacoes: number
+  totalCliquesProdutos: number
   cliquesPorRegiao: { regiao: string; total: number }[]
   cliquesSemana: BIWeek[]
   trend: number
@@ -1156,16 +1158,32 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
             </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4 space-y-4">
-            {/* Weekly clicks + trend */}
-            <div className="flex items-center gap-4">
+            {/* KPIs: interações semanais + visualizações + cliques de produto */}
+            <div className="grid grid-cols-3 gap-3">
               <div>
-                <p className="text-xs text-gray-500">Cliques semanais</p>
+                <p className="text-xs text-gray-500">Interações semana</p>
                 <p className="text-2xl font-bold text-gray-800">
                   {bi.cliquesSemana.length > 0
                     ? bi.cliquesSemana[bi.cliquesSemana.length - 1].total
                     : 0}
                 </p>
               </div>
+              <div>
+                <p className="text-xs text-gray-500">Visualizações</p>
+                <p className="text-2xl font-bold text-orange-600">
+                  {bi.totalVisualizacoes || 0}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Cliques produtos</p>
+                <p className="text-2xl font-bold text-red-600">
+                  {bi.totalCliquesProdutos || 0}
+                </p>
+              </div>
+            </div>
+
+            {/* Trend + Região */}
+            <div className="flex items-center gap-4">
               <div className="flex items-center gap-1">
                 {bi.trend >= 0 ? (
                   <TrendingUp className="h-4 w-4 text-red-500" />
@@ -1181,6 +1199,7 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
                   {bi.trend >= 0 ? '+' : ''}
                   {bi.trend}%
                 </span>
+                <span className="text-xs text-gray-400 ml-1">vs semana anterior</span>
               </div>
               <div className="ml-auto text-right">
                 <p className="text-xs text-gray-500">Região</p>

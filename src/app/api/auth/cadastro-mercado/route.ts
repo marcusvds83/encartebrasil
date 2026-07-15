@@ -101,8 +101,10 @@ export async function POST(req: NextRequest) {
     const res = NextResponse.json({ ok: true, tipo: 'mercado', ...data })
     res.cookies.set(cookie)
 
-    // Envia e-mail de boas-vindas (fire-and-forget, não bloqueia o cadastro)
-    emailBoasVindasMercado(nome, email).catch(() => {})
+    // Envia e-mail de boas-vindas (fire-and-forget, loga resultado)
+    emailBoasVindasMercado(nome, email).then((ok) => {
+      console.log(`[cadastro-mercado] email boas-vindas: ${ok ? 'ENVIADO' : 'FALHOU'}`)
+    })
 
     return res
   } catch (e) {

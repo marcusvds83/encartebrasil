@@ -7,8 +7,23 @@ export async function GET() {
     const session = await getSession()
     if (!session || session.tipo !== 'mercado') return NextResponse.json({ erro: 'Não autorizado' }, { status: 401 })
 
-    // Top 10 produtos mais clicados
-    const topProdutosGrouped = await db.cliqueProduto.groupByProduto(session.id)
+    // Todos os registros de interação deste mercado
+    const todos = await db.cliqueProduto.findByMarket(session.id)
+
+    // Separar visualizações de mercado vs cliques em produto
+    const visualizacoes = todos.filter((c: any) => c.tipo === 'mercado')
+    const cliquesProduto = todos.filter((c: any) => c.tipo !== 'mercado' && c.produtoId)
+
+    // Top 10 produtos mais clicados (somente cliques de produto)
+    const counts: Record<string, number> = {}
+    for (const c of cliquesProduto) {
+      counts[c.produtoId] = (counts[c.produtoId] || 0) + 1
+    }
+    const topProdutosGrouped = Object.entries(counts)
+      .map(([produtoId, cnt]) => ({ produtoId, _count: { id: cnt } }))
+      .sort((a, b) => b._count.id - a._count.id)
+      .slice(0, 10)
+
     const topComNomes = await Promise.all(
       topProdutosGrouped.map(async (tp: any) => {
         const produto = await db.produto.findUnique(tp.produtoId)
@@ -27,10 +42,9 @@ export async function GET() {
     })
     const regiao = mercado ? `${mercado.cidade}/${mercado.estado}` : ''
 
-    // Cliques por semana
-    const cliques = await db.cliqueProduto.findByMarket(session.id)
+    // Interações por semana (TODAS: visualizações + cliques de produto)
     const semanas: Record<string, number> = {}
-    for (const c of cliques) {
+    for (const c of todos) {
       const d = new Date(c.criadoEm)
       const weekStart = new Date(d)
       weekStart.setDate(d.getDate() - d.getDay())
@@ -50,12 +64,15 @@ export async function GET() {
 
     return NextResponse.json({
       topProdutos: topComNomes,
-      cliquesPorRegiao: [{ regiao, total: cliques.length }],
+      totalVisualizacoes: visualizacoes.length,
+      totalCliquesProdutos: cliquesProduto.length,
+      cliquesPorRegiao: [{ regiao, total: todos.length }],
       cliquesSemana,
       trend,
       regiao,
     })
-  } catch {
+  } catch (err) {
+    console.error('[bi] erro:', err)
     return NextResponse.json({ erro: 'Erro ao buscar BI' }, { status: 500 })
   }
 }

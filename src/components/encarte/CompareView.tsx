@@ -72,7 +72,7 @@ export default function CompareView({ sessionId, onAddToList }: CompareViewProps
     try {
       await api('/api/clique', {
         method: 'POST',
-        body: JSON.stringify({ produtoId: p.id, mercadoId: p.mercado.id, sessionId }),
+        body: JSON.stringify({ produtoId: p.id, mercadoId: p.mercado.id, sessionId, tipo: 'produto' }),
       })
     } catch { /* ignore */ }
     onAddToList({

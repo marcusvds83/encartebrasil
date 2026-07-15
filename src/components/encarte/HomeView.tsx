@@ -327,6 +327,7 @@ function MarketDetailView({
           produtoId: p.id,
           mercadoId: mercadoId,
           sessionId,
+          tipo: 'produto',
         }),
       }).catch(() => {})
       onAddToList({
@@ -805,6 +806,21 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
     return <HomeLoading />
   }
 
+  // Registra visualização de mercado (fire-and-forget)
+  const registrarVisualizacaoMercado = useCallback((mid: string) => {
+    api('/api/clique', {
+      method: 'POST',
+      body: JSON.stringify({ mercadoId: mid, sessionId, tipo: 'mercado' }),
+    }).catch(() => {})
+  }, [sessionId])
+
+  // Abre mercado + registra visualização
+  const openMercado = useCallback((mid: string, mode: 'produtos' | 'catalogo' = 'produtos') => {
+    setDetailMode(mode)
+    setSelectedMercado(mid)
+    registrarVisualizacaoMercado(mid)
+  }, [registrarVisualizacaoMercado])
+
   // ── Detail mode ─────────────────────────────────────────────────────
   if (selectedMercado) {
     return (
@@ -891,20 +907,29 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-            {maisBaratos.slice(0, 12).map((p) => (
+            {maisBaratos.slice(0, 12).map((p) => {
+              const mId = p.mercado?.id || p.mercadoId || ''
+              return (
               <motion.button
                 key={p.id}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => onAddToList({
-                  produtoId: p.id,
-                  mercadoId: p.mercado?.id || p.mercadoId || '',
-                  nome: p.nome,
-                  marca: p.marca,
-                  preco: p.preco,
-                  unidade: p.unidade,
-                  mercadoNome: p.mercado?.nome,
-                  mercadoCidade: p.mercado?.cidade ? `${p.mercado.cidade}/${p.mercado.estado}` : undefined,
-                })}
+                onClick={() => {
+                  // Registra clique do produto no BI
+                  api('/api/clique', {
+                    method: 'POST',
+                    body: JSON.stringify({ produtoId: p.id, mercadoId: mId, sessionId, tipo: 'produto' }),
+                  }).catch(() => {})
+                  onAddToList({
+                    produtoId: p.id,
+                    mercadoId: mId,
+                    nome: p.nome,
+                    marca: p.marca,
+                    preco: p.preco,
+                    unidade: p.unidade,
+                    mercadoNome: p.mercado?.nome,
+                    mercadoCidade: p.mercado?.cidade ? `${p.mercado.cidade}/${p.mercado.estado}` : undefined,
+                  })
+                }}
                 className="text-left bg-white border border-gray-200 rounded-lg p-2.5 hover:border-red-300 hover:shadow-sm transition-all relative group"
               >
                 {/* Badget do mercado */}
@@ -926,7 +951,8 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
                   <p className="text-[10px] text-gray-400">{p.unidade}</p>
                 )}
               </motion.button>
-            ))}
+              )
+            })}
           </div>
         )}
       </section>
@@ -945,7 +971,7 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
                 <DestaqueCard
                   key={m.id}
                   m={m}
-                  onClick={() => setSelectedMercado(m.id)}
+                  onClick={() => openMercado(m.id)}
                 />
               ))}
             </div>
@@ -1007,8 +1033,8 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
               <MarketCard
                 key={m.id}
                 m={m}
-                onCatalogo={() => { setDetailMode('catalogo'); setSelectedMercado(m.id) }}
-                onProdutos={() => { setDetailMode('produtos'); setSelectedMercado(m.id) }}
+                onCatalogo={() => openMercado(m.id, 'catalogo')}
+                onProdutos={() => openMercado(m.id, 'produtos')}
               />
             ))}
           </div>
