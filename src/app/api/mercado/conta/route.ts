@@ -24,21 +24,21 @@ export async function GET() {
       statusEfetivo = 'piloto_expirado'
     }
 
-    // Count only active (non-expired, concluded) encartes and their products
-    const todosEncartes = await db.encarte?.findMany?.({ where: { mercadoId: mercado.id } }) || []
+    // Encartes ativos (concluídos e não expirados)
+    const todosEncartes = await db.encarte.findMany({ where: { mercadoId: mercado.id } })
     const encartesAtivos = todosEncartes.filter(
       (e: any) => e.statusExtracao === 'concluido' && (!e.dataFim || e.dataFim >= agora),
     )
-    const activeEncarteIds = new Set(encartesAtivos.map((e: any) => e.id))
-    const todosProdutos = await db.produto.findAll()
-    const totalProdutos = todosProdutos.filter(
-      (p: any) => p.mercadoId === mercado.id && activeEncarteIds.has(p.encarteId),
-    ).length
+    const activeEncarteIds = encartesAtivos.map((e: any) => e.id)
+
+    // Conta produtos efficiently (sem findAll N+1)
+    const totalProdutos = await (db.produto as any).countByEncarteIds?.(mercado.id, activeEncarteIds) ?? 0
     const totalEncartes = encartesAtivos.length
     const totalCliques = await db.cliqueProduto.count({ where: { mercadoId: mercado.id } })
 
     return NextResponse.json({ ...mercado, statusEfetivo, totalProdutos, totalEncartes, totalCliques })
-  } catch {
+  } catch (e) {
+    console.error('[conta] erro:', e)
     return NextResponse.json({ erro: 'Erro interno' }, { status: 500 })
   }
 }

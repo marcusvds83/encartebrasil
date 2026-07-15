@@ -45,6 +45,7 @@ interface ListaItem {
   unidade?: string | null
   checked: boolean
   mercadoNome?: string | null
+  mercadoCidade?: string | null
   criadoEm: string
 }
 
@@ -101,13 +102,14 @@ export default function MyListView({ sessionId }: MyListViewProps) {
     fetchList()
   }, [fetchList])
 
-  // Group by mercadoNome
+  // Group by mercadoNome, coleta cidades únicas por grupo
   const grouped = useMemo(() => {
-    const groups: Record<string, ListaItem[]> = {}
+    const groups: Record<string, { items: ListaItem[]; cidades: Set<string> }> = {}
     for (const item of items) {
       const key = item.mercadoNome || 'Outros'
-      if (!groups[key]) groups[key] = []
-      groups[key].push(item)
+      if (!groups[key]) groups[key] = { items: [], cidades: new Set() }
+      groups[key].items.push(item)
+      if (item.mercadoCidade) groups[key].cidades.add(item.mercadoCidade)
     }
     return groups
   }, [items])
@@ -292,7 +294,12 @@ export default function MyListView({ sessionId }: MyListViewProps) {
       {/* Botão: Rota dos mercados mais próximos */}
       {Object.keys(grouped).length > 0 && (
         <a
-          href={`https://www.google.com/maps/search/${encodeURIComponent(Object.keys(grouped).join(' supermercado, ') + ' supermercado')}`}
+          href={`https://www.google.com/maps/search/${encodeURIComponent(
+            Object.entries(grouped).map(([nome, g]) => {
+              const cidade = [...g.cidades][0] || ''
+              return cidade ? `${nome} ${cidade}` : nome
+            }).join(' ')
+          )}`}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-red-600 to-orange-500 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-sm hover:shadow-md transition-shadow"
@@ -304,7 +311,7 @@ export default function MyListView({ sessionId }: MyListViewProps) {
 
       {/* Grouped items */}
       <div className="space-y-4 pb-20">
-        {Object.entries(grouped).map(([market, marketItems]) => (
+        {Object.entries(grouped).map(([market, group]) => (
           <motion.div
             key={market}
             initial={{ opacity: 0, y: 8 }}
@@ -316,13 +323,16 @@ export default function MyListView({ sessionId }: MyListViewProps) {
               <span className="text-xs font-semibold text-red-700 uppercase tracking-wide">
                 {market}
               </span>
+              {[...group.cidades][0] && (
+                <span className="text-[10px] text-gray-400">{[...group.cidades][0]}</span>
+              )}
               <Badge variant="secondary" className="text-[10px] px-1.5">
-                {marketItems.length}
+                {group.items.length}
               </Badge>
             </div>
 
             <Card className="border-gray-100 divide-y divide-gray-50">
-              {marketItems.map((item) => (
+              {group.items.map((item) => (
                 <AnimatePresence key={item.id} mode="popLayout">
                   <motion.div
                     layout

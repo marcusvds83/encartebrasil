@@ -729,192 +729,198 @@
    729→    return destaques.filter((d) => ids.has(d.id))
    730→  }, [destaques, filtered])
    731→
-   732→  // ── Detail mode ─────────────────────────────────────────────────────
-   733→  if (selectedMercado) {
-   734→    return (
-   735→      <MarketDetailView
-   736→        key={selectedMercado + detailMode}
-   737→        mercadoId={selectedMercado}
-   738→        onBack={() => setSelectedMercado(null)}
-   739→        sessionId={sessionId}
-   740→        onAddToList={onAddToList}
-   741→        initialMode={detailMode}
-   742→      />
-   743→    )
-   744→  }
-   745→
-   746→  return (
-   747→    <div className="space-y-5">
-   748→      {/* Botão Painel do Mercado — visível para todos */}
-   749→      {onPainelMercado && (
-   750→        <button
-   751→          type="button"
-   752→          onClick={() => onPainelMercado()}
-   753→          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 to-orange-500 text-white text-sm font-semibold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-shadow"
-   754→        >
-   755→          <Store className="h-4 w-4" />
-   756→          Painel do Mercado (CNPJ)
-   757→        </button>
-   758→      )}
-   759→
-   760→      {/* ═══════════════════════════════════════════════════════════════
-   761→          SEÇÃO 1: Itens mais baratos em promoção (com busca por produto)
-   762→          ═══════════════════════════════════════════════════════════════ */}
-   763→      <section>
-   764→        <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
-   765→          <Tag className="h-4 w-4 text-red-600" /> Itens mais baratos em promoção
-   766→        </h2>
-   767→
-   768→        {/* Busca por produto */}
-   769→        <div className="relative mb-3">
-   770→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-   771→          <Input
-   772→            placeholder="Buscar produto (ex: arroz, leite, feijão...)"
-   773→            className="pl-9 h-10"
-   774→            value={searchProduto}
-   775→            onChange={(e) => setSearchProduto(e.target.value)}
-   776→          />
-   777→        </div>
-   778→
-   779→        {loadingProdutos ? (
-   780→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-   781→            {Array.from({ length: 8 }).map((_, i) => (
-   782→              <Skeleton key={i} className="h-28 rounded-lg" />
-   783→            ))}
-   784→          </div>
-   785→        ) : maisBaratos.length === 0 ? (
-   786→          <div className="text-center py-8 text-gray-400">
-   787→            <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
-   788→            <p className="text-sm">
-   789→              {searchProduto
-   790→                ? 'Nenhum produto encontrado para esta busca'
-   791→                : 'Nenhum produto em promoção no momento'}
-   792→            </p>
-   793→          </div>
-   794→        ) : (
-   795→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-   796→            {maisBaratos.slice(0, 12).map((p) => (
-   797→              <motion.button
-   798→                key={p.id}
-   799→                whileTap={{ scale: 0.97 }}
-   800→                onClick={() => onAddToList({
-   801→                  produtoId: p.id,
-   802→                  mercadoId: p.mercado?.id || p.mercadoId || '',
-   803→                  nome: p.nome,
-   804→                  marca: p.marca,
-   805→                  preco: p.preco,
-   806→                  unidade: p.unidade,
-   807→                  mercadoNome: p.mercado?.nome,
-   808→                })}
-   809→                className="text-left bg-white border border-gray-200 rounded-lg p-2.5 hover:border-red-300 hover:shadow-sm transition-all relative group"
-   810→              >
-   811→                {/* Badget do mercado */}
-   812→                <p className="text-[10px] text-gray-400 truncate flex items-center gap-0.5">
-   813→                  <Store className="h-2.5 w-2.5" />
-   814→                  {p.mercado?.nome || '—'}
-   815→                </p>
-   816→                <p className="text-xs font-medium text-gray-800 leading-tight mt-0.5 line-clamp-2">
-   817→                  {p.nome}
-   818→                </p>
-   819→                {p.marca && (
-   820→                  <p className="text-[10px] text-gray-500 truncate">{p.marca}</p>
-   821→                )}
-   822→                <div className="flex items-center justify-between mt-1.5">
-   823→                  <p className="text-sm font-bold text-red-600">{p.preco}</p>
-   824→                  <Plus className="h-4 w-4 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-   825→                </div>
-   826→                {p.unidade && (
-   827→                  <p className="text-[10px] text-gray-400">{p.unidade}</p>
-   828→                )}
-   829→              </motion.button>
-   830→            ))}
-   831→          </div>
-   832→        )}
-   833→      </section>
-   834→
-   835→      {/* ═══════════════════════════════════════════════════════════════
-   836→          SEÇÃO 2: Mercados em destaque (patrocinados)
-   837→          ═══════════════════════════════════════════════════════════════ */}
-   838→      {destaquesUnicos.length > 0 && (
-   839→        <section>
-   840→          <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
-   841→            <Star className="h-4 w-4 text-amber-500" /> Mercados em destaque
-   842→          </h2>
-   843→          <ScrollArea className="w-full" ref={scrollRef}>
-   844→            <div className="flex gap-4 pb-2">
-   845→              {destaquesUnicos.map((m) => (
-   846→                <DestaqueCard
-   847→                  key={m.id}
-   848→                  m={m}
-   849→                  onClick={() => setSelectedMercado(m.id)}
-   850→                />
-   851→              ))}
-   852→            </div>
-   853→            <ScrollBar orientation="horizontal" />
-   854→          </ScrollArea>
-   855→        </section>
-   856→      )}
-   857→
-   858→      {/* ═══════════════════════════════════════════════════════════════
-   859→          SEÇÃO 3: Todos os mercados cadastrados (com busca e filtro por região)
-   860→          ═══════════════════════════════════════════════════════════════ */}
-   861→      <section>
-   862→        <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
-   863→          <Store className="h-4 w-4 text-red-600" /> Mercados
-   864→        </h2>
-   865→
-   866→        {/* Search + Region Filter */}
-   867→        <div className="flex flex-col sm:flex-row gap-3 mb-4">
-   868→          <div className="relative flex-1">
-   869→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-   870→            <Input
-   871→              placeholder="Buscar mercado por nome..."
-   872→              className="pl-9 h-10"
-   873→              value={searchMercado}
-   874→              onChange={(e) => setSearchMercado(e.target.value)}
-   875→            />
-   876→          </div>
-   877→          <Select value={cityFilter} onValueChange={setCityFilter}>
-   878→            <SelectTrigger className="w-full sm:w-[200px] h-10">
-   879→              <MapPin className="h-4 w-4 mr-2 text-gray-400" />
-   880→              <SelectValue placeholder="Todas as regiões" />
-   881→            </SelectTrigger>
-   882→            <SelectContent>
-   883→              <SelectItem value="all">Todas as regiões</SelectItem>
-   884→              {cities.map((c) => (
-   885→                <SelectItem key={c} value={c}>
-   886→                  {c}
-   887→                </SelectItem>
-   888→              ))}
-   889→            </SelectContent>
-   890→          </Select>
-   891→        </div>
-   892→
-   893→        {loading ? (
-   894→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-   895→            {Array.from({ length: 6 }).map((_, i) => (
-   896→              <Skeleton key={i} className="h-44 rounded-xl" />
-   897→            ))}
-   898→          </div>
-   899→        ) : filtered.length === 0 ? (
-   900→          <div className="text-center py-16 text-gray-400">
-   901→            <Search className="h-10 w-10 mx-auto mb-3 opacity-50" />
-   902→            <p className="text-sm">Nenhum mercado encontrado</p>
-   903→            <p className="text-xs mt-1">Tente ajustar os filtros de busca ou região</p>
+   732→  // ── Initial loading — show "buscando melhores produtos" animation ──
+   733→  // Only on first load while both mercados and produtos are being fetched
+   734→  if (loading && loadingProdutos) {
+   735→    return <HomeLoading />
+   736→  }
+   737→
+   738→  // ── Detail mode ─────────────────────────────────────────────────────
+   739→  if (selectedMercado) {
+   740→    return (
+   741→      <MarketDetailView
+   742→        key={selectedMercado + detailMode}
+   743→        mercadoId={selectedMercado}
+   744→        onBack={() => setSelectedMercado(null)}
+   745→        sessionId={sessionId}
+   746→        onAddToList={onAddToList}
+   747→        initialMode={detailMode}
+   748→      />
+   749→    )
+   750→  }
+   751→
+   752→  return (
+   753→    <div className="space-y-5">
+   754→      {/* Botão Painel do Mercado — visível para todos */}
+   755→      {onPainelMercado && (
+   756→        <button
+   757→          type="button"
+   758→          onClick={() => onPainelMercado()}
+   759→          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 to-orange-500 text-white text-sm font-semibold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+   760→        >
+   761→          <Store className="h-4 w-4" />
+   762→          Painel do Mercado (CNPJ)
+   763→        </button>
+   764→      )}
+   765→
+   766→      {/* ═══════════════════════════════════════════════════════════════
+   767→          SEÇÃO 1: Itens mais baratos em promoção (com busca por produto)
+   768→          ═══════════════════════════════════════════════════════════════ */}
+   769→      <section>
+   770→        <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
+   771→          <Tag className="h-4 w-4 text-red-600" /> Itens mais baratos em promoção
+   772→        </h2>
+   773→
+   774→        {/* Busca por produto */}
+   775→        <div className="relative mb-3">
+   776→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+   777→          <Input
+   778→            placeholder="Buscar produto (ex: arroz, leite, feijão...)"
+   779→            className="pl-9 h-10"
+   780→            value={searchProduto}
+   781→            onChange={(e) => setSearchProduto(e.target.value)}
+   782→          />
+   783→        </div>
+   784→
+   785→        {loadingProdutos ? (
+   786→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+   787→            {Array.from({ length: 8 }).map((_, i) => (
+   788→              <Skeleton key={i} className="h-28 rounded-lg" />
+   789→            ))}
+   790→          </div>
+   791→        ) : maisBaratos.length === 0 ? (
+   792→          <div className="text-center py-8 text-gray-400">
+   793→            <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+   794→            <p className="text-sm">
+   795→              {searchProduto
+   796→                ? 'Nenhum produto encontrado para esta busca'
+   797→                : 'Nenhum produto em promoção no momento'}
+   798→            </p>
+   799→          </div>
+   800→        ) : (
+   801→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+   802→            {maisBaratos.slice(0, 12).map((p) => (
+   803→              <motion.button
+   804→                key={p.id}
+   805→                whileTap={{ scale: 0.97 }}
+   806→                onClick={() => onAddToList({
+   807→                  produtoId: p.id,
+   808→                  mercadoId: p.mercado?.id || p.mercadoId || '',
+   809→                  nome: p.nome,
+   810→                  marca: p.marca,
+   811→                  preco: p.preco,
+   812→                  unidade: p.unidade,
+   813→                  mercadoNome: p.mercado?.nome,
+   814→                })}
+   815→                className="text-left bg-white border border-gray-200 rounded-lg p-2.5 hover:border-red-300 hover:shadow-sm transition-all relative group"
+   816→              >
+   817→                {/* Badget do mercado */}
+   818→                <p className="text-[10px] text-gray-400 truncate flex items-center gap-0.5">
+   819→                  <Store className="h-2.5 w-2.5" />
+   820→                  {p.mercado?.nome || '—'}
+   821→                </p>
+   822→                <p className="text-xs font-medium text-gray-800 leading-tight mt-0.5 line-clamp-2">
+   823→                  {p.nome}
+   824→                </p>
+   825→                {p.marca && (
+   826→                  <p className="text-[10px] text-gray-500 truncate">{p.marca}</p>
+   827→                )}
+   828→                <div className="flex items-center justify-between mt-1.5">
+   829→                  <p className="text-sm font-bold text-red-600">{p.preco}</p>
+   830→                  <Plus className="h-4 w-4 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+   831→                </div>
+   832→                {p.unidade && (
+   833→                  <p className="text-[10px] text-gray-400">{p.unidade}</p>
+   834→                )}
+   835→              </motion.button>
+   836→            ))}
+   837→          </div>
+   838→        )}
+   839→      </section>
+   840→
+   841→      {/* ═══════════════════════════════════════════════════════════════
+   842→          SEÇÃO 2: Mercados em destaque (patrocinados)
+   843→          ═══════════════════════════════════════════════════════════════ */}
+   844→      {destaquesUnicos.length > 0 && (
+   845→        <section>
+   846→          <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
+   847→            <Star className="h-4 w-4 text-amber-500" /> Mercados em destaque
+   848→          </h2>
+   849→          <ScrollArea className="w-full" ref={scrollRef}>
+   850→            <div className="flex gap-4 pb-2">
+   851→              {destaquesUnicos.map((m) => (
+   852→                <DestaqueCard
+   853→                  key={m.id}
+   854→                  m={m}
+   855→                  onClick={() => setSelectedMercado(m.id)}
+   856→                />
+   857→              ))}
+   858→            </div>
+   859→            <ScrollBar orientation="horizontal" />
+   860→          </ScrollArea>
+   861→        </section>
+   862→      )}
+   863→
+   864→      {/* ═══════════════════════════════════════════════════════════════
+   865→          SEÇÃO 3: Todos os mercados cadastrados (com busca e filtro por região)
+   866→          ═══════════════════════════════════════════════════════════════ */}
+   867→      <section>
+   868→        <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
+   869→          <Store className="h-4 w-4 text-red-600" /> Mercados
+   870→        </h2>
+   871→
+   872→        {/* Search + Region Filter */}
+   873→        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+   874→          <div className="relative flex-1">
+   875→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+   876→            <Input
+   877→              placeholder="Buscar mercado por nome..."
+   878→              className="pl-9 h-10"
+   879→              value={searchMercado}
+   880→              onChange={(e) => setSearchMercado(e.target.value)}
+   881→            />
+   882→          </div>
+   883→          <Select value={cityFilter} onValueChange={setCityFilter}>
+   884→            <SelectTrigger className="w-full sm:w-[200px] h-10">
+   885→              <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+   886→              <SelectValue placeholder="Todas as regiões" />
+   887→            </SelectTrigger>
+   888→            <SelectContent>
+   889→              <SelectItem value="all">Todas as regiões</SelectItem>
+   890→              {cities.map((c) => (
+   891→                <SelectItem key={c} value={c}>
+   892→                  {c}
+   893→                </SelectItem>
+   894→              ))}
+   895→            </SelectContent>
+   896→          </Select>
+   897→        </div>
+   898→
+   899→        {loading ? (
+   900→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   901→            {Array.from({ length: 6 }).map((_, i) => (
+   902→              <Skeleton key={i} className="h-44 rounded-xl" />
+   903→            ))}
    904→          </div>
-   905→        ) : (
-   906→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-   907→            {filtered.map((m) => (
-   908→              <MarketCard
-   909→                key={m.id}
-   910→                m={m}
-   911→                onCatalogo={() => { setDetailMode('catalogo'); setSelectedMercado(m.id) }}
-   912→                onProdutos={() => { setDetailMode('produtos'); setSelectedMercado(m.id) }}
-   913→              />
-   914→            ))}
-   915→          </div>
-   916→        )}
-   917→      </section>
-   918→    </div>
-   919→  )
-   920→}
+   905→        ) : filtered.length === 0 ? (
+   906→          <div className="text-center py-16 text-gray-400">
+   907→            <Search className="h-10 w-10 mx-auto mb-3 opacity-50" />
+   908→            <p className="text-sm">Nenhum mercado encontrado</p>
+   909→            <p className="text-xs mt-1">Tente ajustar os filtros de busca ou região</p>
+   910→          </div>
+   911→        ) : (
+   912→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   913→            {filtered.map((m) => (
+   914→              <MarketCard
+   915→                key={m.id}
+   916→                m={m}
+   917→                onCatalogo={() => { setDetailMode('catalogo'); setSelectedMercado(m.id) }}
+   918→                onProdutos={() => { setDetailMode('produtos'); setSelectedMercado(m.id) }}
+   919→              />
+   920→            ))}
+   921→          </div>
+   922→        )}
+   923→      </section>
+   924→    </div>
+   925→  )
+   926→}

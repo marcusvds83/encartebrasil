@@ -262,6 +262,22 @@ export const db = {
     count: async (opts: { where: { mercadoId: string } }) => {
       return countCollection(COLS.produtos, where('mercadoId', '==', opts.where.mercadoId))
     },
+
+    /** Conta produtos de um mercado filtrando por encarteIds específicos */
+    countByEncarteIds: async (mercadoId: string, encarteIds: string[]): Promise<number> => {
+      if (encarteIds.length === 0) return 0
+      let total = 0
+      // Firestore free tier não suporta 'in' com outro where composto bem
+      // Faz uma query por mercadoId e filtra encarteId em memória
+      const snap = await getDocs(
+        query(collection(firestore as any, COLS.produtos), where('mercadoId', '==', mercadoId))
+      )
+      const idSet = new Set(encarteIds)
+      for (const d of snap.docs) {
+        if (idSet.has(d.data().encarteId)) total++
+      }
+      return total
+    },
   },
 
   // ── CliqueProduto ───────────────────────────────────────────────────────

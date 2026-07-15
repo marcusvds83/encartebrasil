@@ -234,6 +234,7 @@ export default function AppShell() {
       preco?: string | null
       unidade?: string | null
       mercadoNome?: string | null
+      mercadoCidade?: string | null
     }) => {
       try {
         await api('/api/lista', {

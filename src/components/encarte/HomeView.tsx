@@ -14,6 +14,8 @@ import {
   Store,
   Calendar,
   Tag,
+  Clock,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -249,6 +251,7 @@ function MarketDetailView({
     preco?: string | null
     unidade?: string | null
     mercadoNome?: string | null
+    mercadoCidade?: string | null
   }) => void
   initialMode?: 'produtos' | 'catalogo'
 }) {
@@ -334,9 +337,10 @@ function MarketDetailView({
         preco: p.preco,
         unidade: p.unidade,
         mercadoNome: detail?.nome,
+        mercadoCidade: detail ? `${detail.cidade}/${detail.estado}` : undefined,
       })
     },
-    [sessionId, mercadoId, detail?.nome, onAddToList],
+    [sessionId, mercadoId, detail, onAddToList],
   )
 
   if (loading) {
@@ -629,6 +633,60 @@ function MarketDetailView({
   )
 }
 
+// ── Search History (localStorage, 30 dias) ──────────────────────────────────
+
+const SEARCH_HISTORY_KEY = 'eb_search_history'
+const SEARCH_MAX_AGE = 30 * 24 * 60 * 60 * 1000 // 30 dias
+const SEARCH_MAX_ITEMS = 8
+
+interface SearchEntry { text: string; ts: number }
+
+function loadSearchHistory(): SearchEntry[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(SEARCH_HISTORY_KEY)
+    if (!raw) return []
+    const entries: SearchEntry[] = JSON.parse(raw)
+    const now = Date.now()
+    // Remove entradas antigas (> 30 dias)
+    const valid = entries.filter((e) => now - e.ts < SEARCH_MAX_AGE)
+    // Dedup mantendo a mais recente
+    const seen = new Set<string>()
+    const deduped: SearchEntry[] = []
+    for (const e of valid.sort((a, b) => b.ts - a.ts)) {
+      const key = e.text.toLowerCase().trim()
+      if (key && !seen.has(key)) {
+        seen.add(key)
+        deduped.push(e)
+      }
+    }
+    return deduped.slice(0, SEARCH_MAX_ITEMS)
+  } catch { return [] }
+}
+
+function saveSearchHistory(entries: SearchEntry[]) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(entries.slice(0, SEARCH_MAX_ITEMS)))
+  } catch { /* ignore quota */ }
+}
+
+function addSearchTerm(text: string) {
+  const trimmed = text.trim()
+  if (!trimmed || trimmed.length < 2) return
+  const entries = loadSearchHistory()
+  const key = trimmed.toLowerCase()
+  // Remove duplicata existente
+  const filtered = entries.filter((e) => e.text.toLowerCase() !== key)
+  filtered.unshift({ text: trimmed, ts: Date.now() })
+  saveSearchHistory(filtered)
+}
+
+function removeSearchTerm(text: string) {
+  const entries = loadSearchHistory().filter((e) => e.text !== text)
+  saveSearchHistory(entries)
+}
+
 // ── HomeView ────────────────────────────────────────────────────────────────
 
 interface HomeViewProps {
@@ -641,6 +699,7 @@ interface HomeViewProps {
     preco?: string | null
     unidade?: string | null
     mercadoNome?: string | null
+    mercadoCidade?: string | null
   }) => void
   onPainelMercado?: () => void
 }
@@ -650,6 +709,7 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
   const [destaques, setDestaques] = useState<MercadoSummary[]>([])
   const [maisBaratos, setMaisBaratos] = useState<any[]>([])
   const [searchProduto, setSearchProduto] = useState('')
+  const [searchHistory, setSearchHistory] = useState<SearchEntry[]>([])
   const [searchMercado, setSearchMercado] = useState('')
   const [cityFilter, setCityFilter] = useState<string>('all')
   const [loading, setLoading] = useState(true)
@@ -657,6 +717,9 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
   const [selectedMercado, setSelectedMercado] = useState<string | null>(null)
   const [detailMode, setDetailMode] = useState<'produtos' | 'catalogo'>('produtos')
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Load search history on mount
+  useEffect(() => { setSearchHistory(loadSearchHistory()) }, [])
 
   // Fetch markets
   useEffect(() => {
@@ -679,14 +742,21 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
     }
   }, [])
 
-  // Fetch mais baratos (with optional search)
+  // Fetch mais baratos (with optional search) + salva histórico
   useEffect(() => {
     let cancelled = false
     setLoadingProdutos(true)
     const q = searchProduto.trim() ? `&busca=${encodeURIComponent(searchProduto.trim())}` : ''
     api<{ produtos: any[] }>(`/api/produtos/mais-baratos?limit=30${q}`)
       .then((d) => {
-        if (!cancelled) setMaisBaratos(d.produtos || [])
+        if (!cancelled) {
+          setMaisBaratos(d.produtos || [])
+          // Salva no histórico se a busca teve resultados e tem texto suficiente
+          if (searchProduto.trim().length >= 2 && (d.produtos || []).length > 0) {
+            addSearchTerm(searchProduto.trim())
+            setSearchHistory(loadSearchHistory())
+          }
+        }
       })
       .catch(() => {})
       .finally(() => {
@@ -772,7 +842,7 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
         </h2>
 
         {/* Busca por produto */}
-        <div className="relative mb-3">
+        <div className="relative mb-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
             placeholder="Buscar produto (ex: arroz, leite, feijão...)"
@@ -781,6 +851,28 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
             onChange={(e) => setSearchProduto(e.target.value)}
           />
         </div>
+
+        {/* Últimas buscas */}
+        {!searchProduto.trim() && searchHistory.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap mb-3">
+            <Clock className="h-3 w-3 text-gray-400 shrink-0" />
+            <span className="text-[10px] text-gray-400 uppercase tracking-wide shrink-0">Últimas buscas</span>
+            {searchHistory.slice(0, 6).map((entry) => (
+              <motion.button
+                key={entry.text}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setSearchProduto(entry.text)}
+                className="group flex items-center gap-1 bg-gray-100 hover:bg-red-50 text-gray-600 hover:text-red-700 text-xs px-2.5 py-1 rounded-full transition-colors"
+              >
+                <span className="truncate max-w-[120px]">{entry.text}</span>
+                <X
+                  className="h-2.5 w-2.5 text-gray-300 group-hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                  onClick={(e) => { e.stopPropagation(); removeSearchTerm(entry.text); setSearchHistory(loadSearchHistory()) }}
+                />
+              </motion.button>
+            ))}
+          </div>
+        )}
 
         {loadingProdutos ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
@@ -811,6 +903,7 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
                   preco: p.preco,
                   unidade: p.unidade,
                   mercadoNome: p.mercado?.nome,
+                  mercadoCidade: p.mercado?.cidade ? `${p.mercado.cidade}/${p.mercado.estado}` : undefined,
                 })}
                 className="text-left bg-white border border-gray-200 rounded-lg p-2.5 hover:border-red-300 hover:shadow-sm transition-all relative group"
               >

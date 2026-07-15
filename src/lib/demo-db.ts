@@ -372,6 +372,11 @@ export const demoDb = {
     count: async (opts: { where: { mercadoId: string } }) => {
       return produtos.filter((p) => p.mercadoId === opts.where.mercadoId).length
     },
+
+    countByEncarteIds: async (mercadoId: string, encarteIds: string[]): Promise<number> => {
+      const idSet = new Set(encarteIds)
+      return produtos.filter((p) => p.mercadoId === mercadoId && idSet.has(p.encarteId)).length
+    },
   },
 
   cliqueProduto: {

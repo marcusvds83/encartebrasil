@@ -83,6 +83,7 @@ export default function CompareView({ sessionId, onAddToList }: CompareViewProps
       preco: p.preco,
       unidade: p.unidade,
       mercadoNome: p.mercado.nome,
+      mercadoCidade: p.mercado.cidade ? `${p.mercado.cidade}/${p.mercado.estado}` : undefined,
     })
     toast.success(`"${p.nome}" adicionado à lista`)
     setTimeout(() => setAddingId(null), 1200)

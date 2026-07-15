@@ -42,8 +42,13 @@ export interface EmailOptions {
 
 /**
  * Envia um e-mail via SMTP. Retorna true em sucesso.
+ * Se SMTP_PASS não estiver configurado, loga aviso e retorna false.
  */
 export async function enviarEmail(opts: EmailOptions): Promise<boolean> {
+  if (!SMTP_PASS) {
+    console.warn('[email] SMTP_PASS não configurada — e-mail NÃO enviado. Defina a env var SMTP_PASS no Render.')
+    return false
+  }
   try {
     const transport = getTransporter()
     await transport.sendMail({
