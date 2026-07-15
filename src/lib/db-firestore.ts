@@ -191,6 +191,14 @@ export const db = {
       const snap = await getDocs(q)
       return snap.size
     },
+
+    delete: async (id: string) => {
+      // Remove todos os produtos associados a este encarte
+      const prodsSnap = await getDocs(query(collection(firestore as any, COLS.produtos), where('encarteId', '==', id)))
+      for (const p of prodsSnap.docs) await deleteDoc(p.ref)
+      // Remove o encarte
+      await deleteDoc(doc(firestore as any, COLS.encartes, id))
+    },
   },
 
   // ── Produto ─────────────────────────────────────────────────────────────

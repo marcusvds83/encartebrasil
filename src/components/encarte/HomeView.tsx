@@ -729,6 +729,12 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
     return destaques.filter((d) => ids.has(d.id))
   }, [destaques, filtered])
 
+  // ── Initial loading — show "buscando melhores produtos" animation ──
+  // Only on first load while both mercados and produtos are being fetched
+  if (loading && loadingProdutos) {
+    return <HomeLoading />
+  }
+
   // ── Detail mode ─────────────────────────────────────────────────────
   if (selectedMercado) {
     return (
