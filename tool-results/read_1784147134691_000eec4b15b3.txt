@@ -1,0 +1,1800 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useEffect, useCallback } from 'react'
+     4→     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→     5→import {
+     6→     6→  LogIn,
+     7→     7→  FileText,
+     8→     8→  Package,
+     9→     9→  MousePointerClick,
+    10→    10→  Upload,
+    11→    11→  ChevronDown,
+    12→    12→  ChevronUp,
+    13→    13→  TrendingUp,
+    14→    14→  TrendingDown,
+    15→    15→  MapPin,
+    16→    16→  Headphones,
+    17→    17→  Send,
+    18→    18→  CheckCircle,
+    19→    19→  BarChart3,
+    20→    20→  Loader2,
+    21→    21→  UserCircle,
+    22→    22→  Save,
+    23→    23→  Trash2,
+    24→    24→  X,
+    25→    25→  Eye,
+    26→    26→  Pencil,
+    27→    27→  CreditCard,
+    28→    28→  Calendar,
+    29→    29→} from 'lucide-react'
+    30→    30→import { Button } from '@/components/ui/button'
+    31→    31→import { Input } from '@/components/ui/input'
+    32→    32→import { Label } from '@/components/ui/label'
+    33→    33→import { Badge } from '@/components/ui/badge'
+    34→    34→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    35→    35→import { Separator } from '@/components/ui/separator'
+    36→    36→import { Skeleton } from '@/components/ui/skeleton'
+    37→    37→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+    38→    38→import { cn } from '@/lib/utils'
+    39→    39→import { api, useSession } from './AppShell'
+    40→    40→import { toast } from 'sonner'
+    41→    41→import { UploadLoading } from './LoadingAnimation'
+    42→    42→import {
+    43→    43→  Select,
+    44→    44→  SelectContent,
+    45→    45→  SelectItem,
+    46→    46→  SelectTrigger,
+    47→    47→  SelectValue,
+    48→    48→} from '@/components/ui/select'
+    49→    49→import {
+    50→    50→  BarChart,
+    51→    51→  Bar,
+    52→    52→  XAxis,
+    53→    53→  YAxis,
+    54→    54→  CartesianGrid,
+    55→    55→  Tooltip,
+    56→    56→  ResponsiveContainer,
+    57→    57→  Cell,
+    58→    58→} from 'recharts'
+    59→    59→
+    60→    60→// ── Types ───────────────────────────────────────────────────────────────────
+    61→    61→
+    62→    62→interface ContaData {
+    63→    63→  id: string
+    64→    64→  nome: string
+    65→    65→  cidade: string
+    66→    66→  estado: string
+    67→    67→  emailLogin: string
+    68→    68→  status: string
+    69→    69→  statusEfetivo: string
+    70→    70→  destaque: boolean
+    71→    71→  mensalidade: number
+    72→    72→  totalProdutos: number
+    73→    73→  totalEncartes: number
+    74→    74→  totalCliques: number
+    75→    75→  pilotoInicio?: string | null
+    76→    76→  pilotoFim?: string | null
+    77→    77→  endereco?: string | null
+    78→    78→  telefone?: string | null
+    79→    79→}
+    80→    80→
+    81→    81→interface BITopProduto {
+    82→    82→  nome: string
+    83→    83→  marca: string
+    84→    84→  cliques: number
+    85→    85→}
+    86→    86→
+    87→    87→interface BIWeek {
+    88→    88→  semana: string
+    89→    89→  total: number
+    90→    90→}
+    91→    91→
+    92→    92→interface BIData {
+    93→    93→  topProdutos: BITopProduto[]
+    94→    94→  cliquesPorRegiao: { regiao: string; total: number }[]
+    95→    95→  cliquesSemana: BIWeek[]
+    96→    96→  trend: number
+    97→    97→  regiao: string
+    98→    98→}
+    99→    99→
+   100→   100→interface EncarteItem {
+   101→   101→  id: string
+   102→   102→  titulo: string
+   103→   103→  statusExtracao: string
+   104→   104→  criadoEm: string
+   105→   105→  pdfPath?: string | null
+   106→   106→  dataInicio?: string | null
+   107→   107→  dataFim?: string | null
+   108→   108→  _count: { produtos: number }
+   109→   109→}
+   110→   110→
+   111→   111→// ── Helpers ─────────────────────────────────────────────────────────────────
+   112→   112→
+   113→   113→function statusBadge(status: string) {
+   114→   114→  const map: Record<string, { label: string; cls: string }> = {
+   115→   115→    piloto: {
+   116→   116→      label: 'Piloto',
+   117→   117→      cls: 'bg-blue-100 text-blue-700 border-blue-200',
+   118→   118→    },
+   119→   119→    piloto_expirado: {
+   120→   120→      label: 'Piloto Expirado',
+   121→   121→      cls: 'bg-orange-100 text-orange-700 border-orange-200',
+   122→   122→    },
+   123→   123→    ativo: {
+   124→   124→      label: 'Ativo',
+   125→   125→      cls: 'bg-red-50 text-red-700 border-red-200',
+   126→   126→    },
+   127→   127→    inativo: {
+   128→   128→      label: 'Inativo',
+   129→   129→      cls: 'bg-gray-100 text-gray-500 border-gray-200',
+   130→   130→    },
+   131→   131→    suspenso: {
+   132→   132→      label: 'Suspenso',
+   133→   133→      cls: 'bg-red-100 text-red-700 border-red-200',
+   134→   134→    },
+   135→   135→  }
+   136→   136→  const s = map[status] || { label: status, cls: 'bg-gray-100 text-gray-500' }
+   137→   137→  return <Badge className={cn('text-xs', s.cls)}>{s.label}</Badge>
+   138→   138→}
+   139→   139→
+   140→   140→function extracaoLabel(s: string) {
+   141→   141→  const map: Record<string, string> = {
+   142→   142→    pendente: 'Pendente',
+   143→   143→    processando: 'Processando',
+   144→   144→    concluido: 'Concluído',
+   145→   145→    erro: 'Erro',
+   146→   146→  }
+   147→   147→  return map[s] || s
+   148→   148→}
+   149→   149→
+   150→   150→// ── Login Form ──────────────────────────────────────────────────────────────
+   151→   151→
+   152→   152→function formatCNPJ(v: string) {
+   153→   153→  const d = v.replace(/\D/g, '').slice(0, 14)
+   154→   154→  return d
+   155→   155→    .replace(/^(\d{2})(\d)/, '$1.$2')
+   156→   156→    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+   157→   157→    .replace(/\.(\d{3})(\d)/, '.$1/$2')
+   158→   158→    .replace(/(\d{4})(\d)/, '$1-$2')
+   159→   159→}
+   160→   160→
+   161→   161→function formatCPF(v: string) {
+   162→   162→  const d = v.replace(/\D/g, '').slice(0, 11)
+   163→   163→  return d
+   164→   164→    .replace(/^(\d{3})(\d)/, '$1.$2')
+   165→   165→    .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+   166→   166→    .replace(/\.(\d{3})(\d)/, '.$1-$2')
+   167→   167→}
+   168→   168→
+   169→   169→function LoginForm({ onLogin }: { onLogin: () => void }) {
+   170→   170→  const [tab, setTab] = useState<'pf' | 'pj'>('pf')
+   171→   171→
+   172→   172→  // PF (Consumidor) — Email/Senha + Cadastro
+   173→   173→  const [modoCadastro, setModoCadastro] = useState(false)
+   174→   174→  const [nomeCadastro, setNomeCadastro] = useState('')
+   175→   175→
+   176→   176→  // Esqueci a senha
+   177→   177→  const [modoEsqueci, setModoEsqueci] = useState(false)
+   178→   178→  const [esqueciEmail, setEsqueciEmail] = useState('')
+   179→   179→  const [esqueciCnpj, setEsqueciCnpj] = useState('')
+   180→   180→  const [esqueciNovaSenha, setEsqueciNovaSenha] = useState('')
+   181→   181→  const [esqueciLoading, setEsqueciLoading] = useState(false)
+   182→   182→
+   183→   183→  // PJ (Mercado) — CNPJ + e-mail + senha + cadastro
+   184→   184→  const [cnpj, setCnpj] = useState('')
+   185→   185→  const [email, setEmail] = useState('')
+   186→   186→  const [senha, setSenha] = useState('')
+   187→   187→  const [loading, setLoading] = useState(false)
+   188→   188→  const [modoCadastroPj, setModoCadastroPj] = useState(false)
+   189→   189→  const [nomeMercado, setNomeMercado] = useState('')
+   190→   190→  const [responsavel, setResponsavel] = useState('')
+   191→   191→  const [cpf, setCpf] = useState('')
+   192→   192→  const [cidade, setCidade] = useState('')
+   193→   193→  const [estado, setEstado] = useState('')
+   194→   194→  const [telefone, setTelefone] = useState('')
+   195→   195→
+   196→   196→  const handlePfEmailLogin = async (e: React.FormEvent) => {
+   197→   197→    e.preventDefault()
+   198→   198→    if (!email || !senha) {
+   199→   199→      toast.error('Preencha e-mail e senha')
+   200→   200→      return
+   201→   201→    }
+   202→   202→    setLoading(true)
+   203→   203→    try {
+   204→   204→      await api('/api/auth/login', {
+   205→   205→        method: 'POST',
+   206→   206→        body: JSON.stringify({ email, senha, tipoLogin: 'pf' }),
+   207→   207→      })
+   208→   208→      toast.success('Login de consumidor realizado!')
+   209→   209→      onLogin()
+   210→   210→    } catch (err) {
+   211→   211→      toast.error(err instanceof Error ? err.message : 'Erro ao fazer login')
+   212→   212→    } finally {
+   213→   213→      setLoading(false)
+   214→   214→    }
+   215→   215→  }
+   216→   216→
+   217→   217→  const handlePfCadastro = async (e: React.FormEvent) => {
+   218→   218→    e.preventDefault()
+   219→   219→    if (!nomeCadastro || !email || !senha) {
+   220→   220→      toast.error('Preencha nome, e-mail e senha')
+   221→   221→      return
+   222→   222→    }
+   223→   223→    if (senha.length < 6) {
+   224→   224→      toast.error('Senha deve ter no mínimo 6 caracteres')
+   225→   225→      return
+   226→   226→    }
+   227→   227→    setLoading(true)
+   228→   228→    try {
+   229→   229→      await api('/api/auth/cadastro', {
+   230→   230→        method: 'POST',
+   231→   231→        body: JSON.stringify({ email, senha, nome: nomeCadastro }),
+   232→   232→      })
+   233→   233→      toast.success('Conta criada com sucesso!')
+   234→   234→      onLogin()
+   235→   235→    } catch (err) {
+   236→   236→      toast.error(err instanceof Error ? err.message : 'Erro ao cadastrar')
+   237→   237→    } finally {
+   238→   238→      setLoading(false)
+   239→   239→    }
+   240→   240→  }
+   241→   241→
+   242→   242→  const handlePjLogin = async (e: React.FormEvent) => {
+   243→   243→    e.preventDefault()
+   244→   244→    const cnpjLimpo = cnpj.replace(/\D/g, '')
+   245→   245→    if (cnpjLimpo.length !== 14) {
+   246→   246→      toast.error('CNPJ inválido. Digite os 14 dígitos.')
+   247→   247→      return
+   248→   248→    }
+   249→   249→    if (!senha) {
+   250→   250→      toast.error('Preencha a senha')
+   251→   251→      return
+   252→   252→    }
+   253→   253→    setLoading(true)
+   254→   254→    try {
+   255→   255→      await api('/api/auth/login', {
+   256→   256→        method: 'POST',
+   257→   257→        body: JSON.stringify({ email, senha, tipo: 'mercado', cnpj: cnpjLimpo, tipoLogin: 'pj' }),
+   258→   258→      })
+   259→   259→      toast.success('Login de mercado realizado!')
+   260→   260→      onLogin()
+   261→   261→    } catch (err) {
+   262→   262→      toast.error(err instanceof Error ? err.message : 'Erro ao fazer login')
+   263→   263→    } finally {
+   264→   264→      setLoading(false)
+   265→   265→    }
+   266→   266→  }
+   267→   267→
+   268→   268→  const handlePjCadastro = async (e: React.FormEvent) => {
+   269→   269→    e.preventDefault()
+   270→   270→    const cnpjLimpo = cnpj.replace(/\D/g, '')
+   271→   271→    const cpfLimpo = cpf.replace(/\D/g, '')
+   272→   272→    if (!nomeMercado || !cnpjLimpo || !email || !senha || !cidade || !estado || !responsavel || !cpfLimpo) {
+   273→   273→      toast.error('Preencha todos os campos obrigatórios')
+   274→   274→      return
+   275→   275→    }
+   276→   276→    if (cnpjLimpo.length !== 14) {
+   277→   277→      toast.error('CNPJ inválido. Digite 14 dígitos.')
+   278→   278→      return
+   279→   279→    }
+   280→   280→    if (cpfLimpo.length !== 11) {
+   281→   281→      toast.error('CPF inválido. Digite 11 dígitos.')
+   282→   282→      return
+   283→   283→    }
+   284→   284→    if (senha.length < 6) {
+   285→   285→      toast.error('Senha deve ter no mínimo 6 caracteres')
+   286→   286→      return
+   287→   287→    }
+   288→   288→    setLoading(true)
+   289→   289→    try {
+   290→   290→      await api('/api/auth/cadastro-mercado', {
+   291→   291→        method: 'POST',
+   292→   292→        body: JSON.stringify({
+   293→   293→          nome: nomeMercado,
+   294→   294→          cnpj: cnpjLimpo,
+   295→   295→          email,
+   296→   296→          senha,
+   297→   297→          cidade,
+   298→   298→          estado,
+   299→   299→          responsavel,
+   300→   300→          cpf: cpfLimpo,
+   301→   301→          telefone,
+   302→   302→        }),
+   303→   303→      })
+   304→   304→      toast.success('Mercado cadastrado! 60 dias de piloto grátis.')
+   305→   305→      onLogin()
+   306→   306→    } catch (err) {
+   307→   307→      toast.error(err instanceof Error ? err.message : 'Erro ao cadastrar mercado')
+   308→   308→    } finally {
+   309→   309→      setLoading(false)
+   310→   310→    }
+   311→   311→  }
+   312→   312→
+   313→   313→  return (
+   314→   314→    <motion.div
+   315→   315→      initial={{ opacity: 0, y: 20 }}
+   316→   316→      animate={{ opacity: 1, y: 0 }}
+   317→   317→      className="flex items-center justify-center min-h-[60vh] px-4"
+   318→   318→    >
+   319→   319→      <Card className="w-full max-w-sm border-orange-100">
+   320→   320→        <CardHeader className="text-center pb-2">
+   321→   321→          <img
+   322→   322→            src="/icon-192.png"
+   323→   323→            alt="EncarteBrasil"
+   324→   324→            className="h-20 w-20 rounded-2xl object-cover mx-auto mb-3 shadow-md"
+   325→   325→          />
+   326→   326→          <CardTitle className="text-lg">EncarteBrasil</CardTitle>
+   327→   327→          <p className="text-xs text-gray-500 mt-1">
+   328→   328→            Acesse para gerenciar e comparar encartes
+   329→   329→          </p>
+   330→   330→        </CardHeader>
+   331→   331→        <CardContent className="space-y-4">
+   332→   332→          <Tabs value={tab} onValueChange={(v) => setTab(v as 'pf' | 'pj')}>
+   333→   333→            <TabsList className="grid w-full grid-cols-2">
+   334→   334→              <TabsTrigger value="pf">Consumidor</TabsTrigger>
+   335→   335→              <TabsTrigger value="pj">Mercado (CNPJ)</TabsTrigger>
+   336→   336→            </TabsList>
+   337→   337→
+   338→   338→            {/* ── PF: Email/Senha + Cadastro (sem Google) ── */}
+   339→   339→            <TabsContent value="pf" className="space-y-3 mt-4">
+   340→   340→              {!modoCadastro ? (
+   341→   341→                <>
+   342→   342→                  <form onSubmit={handlePfEmailLogin} className="space-y-3">
+   343→   343→                    <div className="space-y-1.5">
+   344→   344→                      <Label className="text-sm">E-mail</Label>
+   345→   345→                      <Input type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+   346→   346→                    </div>
+   347→   347→                    <div className="space-y-1.5">
+   348→   348→                      <Label className="text-sm">Senha</Label>
+   349→   349→                      <Input type="password" placeholder="••••••••" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" />
+   350→   350→                    </div>
+   351→   351→                    <Button type="submit" className="w-full bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-700 hover:to-orange-600 text-white h-11" disabled={loading}>
+   352→   352→                      {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+   353→   353→                      Entrar como Consumidor
+   354→   354→                    </Button>
+   355→   355→                  </form>
+   356→   356→                  <p className="text-[11px] text-gray-400 text-center pt-1">
+   357→   357→                    Não tem conta?{' '}
+   358→   358→                    <button
+   359→   359→                      type="button"
+   360→   360→                      onClick={() => setModoCadastro(true)}
+   361→   361→                      className="text-red-600 font-semibold hover:underline"
+   362→   362→                    >
+   363→   363→                      Cadastre-se grátis
+   364→   364→                    </button>
+   365→   365→                  </p>
+   366→   366→                  <p className="text-center">
+   367→   367→                    <button
+   368→   368→                      type="button"
+   369→   369→                      onClick={() => { setModoEsqueci(true); setEsqueciCnpj('') }}
+   370→   370→                      className="text-[11px] text-gray-500 hover:text-red-600 hover:underline"
+   371→   371→                    >
+   372→   372→                      Esqueci minha senha
+   373→   373→                    </button>
+   374→   374→                  </p>
+   375→   375→                </>
+   376→   376→              ) : (
+   377→   377→                <>
+   378→   378→                  <p className="text-xs text-gray-500 text-center mb-2">
+   379→   379→                    Crie sua conta de consumidor
+   380→   380→                  </p>
+   381→   381→                  <form onSubmit={handlePfCadastro} className="space-y-3">
+   382→   382→                    <div className="space-y-1.5">
+   383→   383→                      <Label className="text-sm">Nome completo</Label>
+   384→   384→                      <Input
+   385→   385→                        type="text"
+   386→   386→                        placeholder="Seu nome"
+   387→   387→                        value={nomeCadastro}
+   388→   388→                        onChange={(e) => setNomeCadastro(e.target.value)}
+   389→   389→                        autoComplete="name"
+   390→   390→                      />
+   391→   391→                    </div>
+   392→   392→                    <div className="space-y-1.5">
+   393→   393→                      <Label className="text-sm">E-mail</Label>
+   394→   394→                      <Input type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+   395→   395→                    </div>
+   396→   396→                    <div className="space-y-1.5">
+   397→   397→                      <Label className="text-sm">Senha (mín. 6 caracteres)</Label>
+   398→   398→                      <Input type="password" placeholder="••••••••" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="new-password" />
+   399→   399→                    </div>
+   400→   400→                    <Button type="submit" className="w-full bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-700 hover:to-orange-600 text-white h-11" disabled={loading}>
+   401→   401→                      {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+   402→   402→                      Criar conta
+   403→   403→                    </Button>
+   404→   404→                  </form>
+   405→   405→                  <p className="text-[11px] text-gray-400 text-center pt-1">
+   406→   406→                    Já tem conta?{' '}
+   407→   407→                    <button
+   408→   408→                      type="button"
+   409→   409→                      onClick={() => setModoCadastro(false)}
+   410→   410→                      className="text-red-600 font-semibold hover:underline"
+   411→   411→                    >
+   412→   412→                      Fazer login
+   413→   413→                    </button>
+   414→   414→                  </p>
+   415→   415→                </>
+   416→   416→              )}
+   417→   417→            </TabsContent>
+   418→   418→
+   419→   419→            {/* ── PJ: Login + Cadastro de Mercado ── */}
+   420→   420→            <TabsContent value="pj" className="space-y-3 mt-4">
+   421→   421→              {!modoCadastroPj ? (
+   422→   422→                <>
+   423→   423→                  <form onSubmit={handlePjLogin} className="space-y-3">
+   424→   424→                    <div className="space-y-1.5">
+   425→   425→                      <Label htmlFor="m-cnpj" className="text-sm">CNPJ</Label>
+   426→   426→                      <Input
+   427→   427→                        id="m-cnpj"
+   428→   428→                        type="text"
+   429→   429→                        inputMode="numeric"
+   430→   430→                        placeholder="00.000.000/0000-00"
+   431→   431→                        value={cnpj}
+   432→   432→                        onChange={(e) => setCnpj(formatCNPJ(e.target.value))}
+   433→   433→                        autoComplete="organization-id"
+   434→   434→                      />
+   435→   435→                    </div>
+   436→   436→                    <div className="space-y-1.5">
+   437→   437→                      <Label htmlFor="m-email" className="text-sm">E-mail</Label>
+   438→   438→                      <Input
+   439→   439→                        id="m-email"
+   440→   440→                        type="email"
+   441→   441→                        placeholder="seu@mercado.com"
+   442→   442→                        value={email}
+   443→   443→                        onChange={(e) => setEmail(e.target.value)}
+   444→   444→                        autoComplete="email"
+   445→   445→                      />
+   446→   446→                    </div>
+   447→   447→                    <div className="space-y-1.5">
+   448→   448→                      <Label htmlFor="m-senha" className="text-sm">Senha</Label>
+   449→   449→                      <Input
+   450→   450→                        id="m-senha"
+   451→   451→                        type="password"
+   452→   452→                        placeholder="••••••••"
+   453→   453→                        value={senha}
+   454→   454→                        onChange={(e) => setSenha(e.target.value)}
+   455→   455→                        autoComplete="current-password"
+   456→   456→                      />
+   457→   457→                    </div>
+   458→   458→                    <Button
+   459→   459→                      type="submit"
+   460→   460→                      className="w-full bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-700 hover:to-orange-600 text-white h-11"
+   461→   461→                      disabled={loading}
+   462→   462→                    >
+   463→   463→                      {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+   464→   464→                      Entrar como Mercado
+   465→   465→                    </Button>
+   466→   466→                  </form>
+   467→   467→                  <p className="text-[11px] text-gray-400 text-center pt-1">
+   468→   468→                    Não tem conta?{' '}
+   469→   469→                    <button
+   470→   470→                      type="button"
+   471→   471→                      onClick={() => setModoCadastroPj(true)}
+   472→   472→                      className="text-red-600 font-semibold hover:underline"
+   473→   473→                    >
+   474→   474→                      Cadastre seu mercado grátis
+   475→   475→                    </button>
+   476→   476→                  </p>
+   477→   477→                  <p className="text-center">
+   478→   478→                    <button
+   479→   479→                      type="button"
+   480→   480→                      onClick={() => { setModoEsqueci(true); setEsqueciEmail(email) }}
+   481→   481→                      className="text-[11px] text-gray-500 hover:text-red-600 hover:underline"
+   482→   482→                    >
+   483→   483→                      Esqueci minha senha
+   484→   484→                    </button>
+   485→   485→                  </p>
+   486→   486→                </>
+   487→   487→              ) : (
+   488→   488→                <>
+   489→   489→                  <p className="text-xs text-gray-500 text-center mb-2">
+   490→   490→                    Cadastre seu mercado — 60 dias de piloto grátis
+   491→   491→                  </p>
+   492→   492→                  <form onSubmit={handlePjCadastro} className="space-y-3">
+   493→   493→                    <div className="space-y-1.5">
+   494→   494→                      <Label className="text-sm">Nome do mercado *</Label>
+   495→   495→                      <Input
+   496→   496→                        type="text"
+   497→   497→                        placeholder="Supermercado Exemplo"
+   498→   498→                        value={nomeMercado}
+   499→   499→                        onChange={(e) => setNomeMercado(e.target.value)}
+   500→   500→                      />
+   501→   501→                    </div>
+   502→   502→                    <div className="grid grid-cols-2 gap-2">
+   503→   503→                      <div className="space-y-1.5">
+   504→   504→                        <Label className="text-sm">CNPJ *</Label>
+   505→   505→                        <Input
+   506→   506→                          type="text"
+   507→   507→                          inputMode="numeric"
+   508→   508→                          placeholder="00.000.000/0000-00"
+   509→   509→                          value={cnpj}
+   510→   510→                          onChange={(e) => setCnpj(formatCNPJ(e.target.value))}
+   511→   511→                        />
+   512→   512→                      </div>
+   513→   513→                      <div className="space-y-1.5">
+   514→   514→                        <Label className="text-sm">Telefone</Label>
+   515→   515→                        <Input
+   516→   516→                          type="text"
+   517→   517→                          placeholder="(11) 99999-9999"
+   518→   518→                          value={telefone}
+   519→   519→                          onChange={(e) => setTelefone(e.target.value)}
+   520→   520→                        />
+   521→   521→                      </div>
+   522→   522→                    </div>
+   523→   523→                    <div className="grid grid-cols-2 gap-2">
+   524→   524→                      <div className="space-y-1.5">
+   525→   525→                        <Label className="text-sm">Responsável *</Label>
+   526→   526→                        <Input
+   527→   527→                          type="text"
+   528→   528→                          placeholder="Nome do responsável"
+   529→   529→                          value={responsavel}
+   530→   530→                          onChange={(e) => setResponsavel(e.target.value)}
+   531→   531→                        />
+   532→   532→                      </div>
+   533→   533→                      <div className="space-y-1.5">
+   534→   534→                        <Label className="text-sm">CPF *</Label>
+   535→   535→                        <Input
+   536→   536→                          type="text"
+   537→   537→                          inputMode="numeric"
+   538→   538→                          placeholder="000.000.000-00"
+   539→   539→                          value={cpf}
+   540→   540→                          onChange={(e) => setCpf(formatCPF(e.target.value))}
+   541→   541→                        />
+   542→   542→                      </div>
+   543→   543→                    </div>
+   544→   544→                    <div className="space-y-1.5">
+   545→   545→                      <Label className="text-sm">E-mail *</Label>
+   546→   546→                      <Input
+   547→   547→                        type="email"
+   548→   548→                        placeholder="contato@mercado.com"
+   549→   549→                        value={email}
+   550→   550→                        onChange={(e) => setEmail(e.target.value)}
+   551→   551→                        autoComplete="email"
+   552→   552→                      />
+   553→   553→                    </div>
+   554→   554→                    <div className="grid grid-cols-2 gap-2">
+   555→   555→                      <div className="space-y-1.5">
+   556→   556→                        <Label className="text-sm">Cidade *</Label>
+   557→   557→                        <Input
+   558→   558→                          type="text"
+   559→   559→                          placeholder="São Paulo"
+   560→   560→                          value={cidade}
+   561→   561→                          onChange={(e) => setCidade(e.target.value)}
+   562→   562→                        />
+   563→   563→                      </div>
+   564→   564→                      <div className="space-y-1.5">
+   565→   565→                        <Label className="text-sm">UF *</Label>
+   566→   566→                        <Input
+   567→   567→                          type="text"
+   568→   568→                          maxLength={2}
+   569→   569→                          placeholder="SP"
+   570→   570→                          value={estado}
+   571→   571→                          onChange={(e) => setEstado(e.target.value.toUpperCase())}
+   572→   572→                        />
+   573→   573→                      </div>
+   574→   574→                    </div>
+   575→   575→                    <div className="space-y-1.5">
+   576→   576→                      <Label className="text-sm">Senha (mín. 6 caracteres) *</Label>
+   577→   577→                      <Input
+   578→   578→                        type="password"
+   579→   579→                        placeholder="••••••••"
+   580→   580→                        value={senha}
+   581→   581→                        onChange={(e) => setSenha(e.target.value)}
+   582→   582→                        autoComplete="new-password"
+   583→   583→                      />
+   584→   584→                    </div>
+   585→   585→                    <Button
+   586→   586→                      type="submit"
+   587→   587→                      className="w-full bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-700 hover:to-orange-600 text-white h-11"
+   588→   588→                      disabled={loading}
+   589→   589→                    >
+   590→   590→                      {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+   591→   591→                      Cadastrar Mercado
+   592→   592→                    </Button>
+   593→   593→                  </form>
+   594→   594→                  <p className="text-[11px] text-gray-400 text-center pt-1">
+   595→   595→                    Já tem conta?{' '}
+   596→   596→                    <button
+   597→   597→                      type="button"
+   598→   598→                      onClick={() => setModoCadastroPj(false)}
+   599→   599→                      className="text-red-600 font-semibold hover:underline"
+   600→   600→                    >
+   601→   601→                      Fazer login
+   602→   602→                    </button>
+   603→   603→                  </p>
+   604→   604→                </>
+   605→   605→              )}
+   606→   606→            </TabsContent>
+   607→   607→          </Tabs>
+   608→   608→        </CardContent>
+   609→   609→      </Card>
+   610→   610→
+   611→   611→      {/* ── Esqueci a Senha Modal ────────────────────────────────────── */}
+   612→   612→      <AnimatePresence>
+   613→   613→        {modoEsqueci && (
+   614→   614→          <motion.div
+   615→   615→            initial={{ opacity: 0 }}
+   616→   616→            animate={{ opacity: 1 }}
+   617→   617→            exit={{ opacity: 0 }}
+   618→   618→            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4"
+   619→   619→            onClick={() => setModoEsqueci(false)}
+   620→   620→          >
+   621→   621→            <motion.div
+   622→   622→              initial={{ scale: 0.95, y: 10 }}
+   623→   623→              animate={{ scale: 1, y: 0 }}
+   624→   624→              exit={{ scale: 0.95, y: 10 }}
+   625→   625→              className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6"
+   626→   626→              onClick={(e) => e.stopPropagation()}
+   627→   627→            >
+   628→   628→              <h3 className="text-base font-bold text-gray-800 mb-1">Redefinir senha</h3>
+   629→   629→              <p className="text-xs text-gray-500 mb-4">
+   630→   630→                {tab === 'pj'
+   631→   631→                  ? 'Informe o CNPJ, e-mail cadastrado e a nova senha.'
+   632→   632→                  : 'Informe o e-mail cadastrado e a nova senha.'}
+   633→   633→              </p>
+   634→   634→              <form
+   635→   635→                className="space-y-3"
+   636→   636→                onSubmit={async (e) => {
+   637→   637→                  e.preventDefault()
+   638→   638→                  if (!esqueciEmail || !esqueciNovaSenha) {
+   639→   639→                    toast.error('Preencha todos os campos')
+   640→   640→                    return
+   641→   641→                  }
+   642→   642→                  if (esqueciNovaSenha.length < 6) {
+   643→   643→                    toast.error('Nova senha deve ter no mínimo 6 caracteres')
+   644→   644→                    return
+   645→   645→                  }
+   646→   646→                  setEsqueciLoading(true)
+   647→   647→                  try {
+   648→   648→                    await api('/api/auth/esqueci-senha', {
+   649→   649→                      method: 'POST',
+   650→   650→                      body: JSON.stringify({
+   651→   651→                        email: esqueciEmail,
+   652→   652→                        novaSenha: esqueciNovaSenha,
+   653→   653→                        tipo: tab === 'pj' ? 'mercado' : 'usuario',
+   654→   654→                        cnpj: tab === 'pj' ? esqueciCnpj.replace(/\D/g, '') : undefined,
+   655→   655→                      }),
+   656→   656→                    })
+   657→   657→                    toast.success('Senha atualizada com sucesso!')
+   658→   658→                    setModoEsqueci(false)
+   659→   659→                    setEsqueciNovaSenha('')
+   660→   660→                  } catch (err) {
+   661→   661→                    toast.error(err instanceof Error ? err.message : 'Erro ao redefinir')
+   662→   662→                  } finally {
+   663→   663→                    setEsqueciLoading(false)
+   664→   664→                  }
+   665→   665→                }}
+   666→   666→              >
+   667→   667→                {tab === 'pj' && (
+   668→   668→                  <div className="space-y-1.5">
+   669→   669→                    <Label className="text-xs">CNPJ *</Label>
+   670→   670→                    <Input
+   671→   671→                      value={esqueciCnpj}
+   672→   672→                      onChange={(e) => setEsqueciCnpj(formatCNPJ(e.target.value))}
+   673→   673→                      placeholder="00.000.000/0001-00"
+   674→   674→                      className="h-9 text-sm"
+   675→   675→                      maxLength={18}
+   676→   676→                    />
+   677→   677→                  </div>
+   678→   678→                )}
+   679→   679→                <div className="space-y-1.5">
+   680→   680→                  <Label className="text-xs">E-mail *</Label>
+   681→   681→                  <Input
+   682→   682→                    type="email"
+   683→   683→                    value={esqueciEmail}
+   684→   684→                    onChange={(e) => setEsqueciEmail(e.target.value)}
+   685→   685→                    placeholder="seu@email.com"
+   686→   686→                    className="h-9 text-sm"
+   687→   687→                  />
+   688→   688→                </div>
+   689→   689→                <div className="space-y-1.5">
+   690→   690→                  <Label className="text-xs">Nova Senha (mín. 6 caracteres) *</Label>
+   691→   691→                  <Input
+   692→   692→                    type="password"
+   693→   693→                    value={esqueciNovaSenha}
+   694→   694→                    onChange={(e) => setEsqueciNovaSenha(e.target.value)}
+   695→   695→                    placeholder="•••••••"
+   696→   696→                    className="h-9 text-sm"
+   697→   697→                    autoComplete="new-password"
+   698→   698→                  />
+   699→   699→                </div>
+   700→   700→                <div className="flex gap-2 pt-1">
+   701→   701→                  <Button
+   702→   702→                    type="submit"
+   703→   703→                    size="sm"
+   704→   704→                    disabled={esqueciLoading}
+   705→   705→                    className="bg-red-600 hover:bg-red-700 text-white h-9 text-xs flex-1"
+   706→   706→                  >
+   707→   707→                    {esqueciLoading && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+   708→   708→                    Redefinir
+   709→   709→                  </Button>
+   710→   710→                  <Button
+   711→   711→                    type="button"
+   712→   712→                    variant="ghost"
+   713→   713→                    size="sm"
+   714→   714→                    onClick={() => setModoEsqueci(false)}
+   715→   715→                    className="h-9 text-xs"
+   716→   716→                  >
+   717→   717→                    Cancelar
+   718→   718→                  </Button>
+   719→   719→                </div>
+   720→   720→              </form>
+   721→   721→            </motion.div>
+   722→   722→          </motion.div>
+   723→   723→        )}
+   724→   724→      </AnimatePresence>
+   725→   725→    </motion.div>
+   726→   726→  )
+   727→   727→}
+   728→   728→
+   729→   729→// ── Dashboard ───────────────────────────────────────────────────────────────
+   730→   730→
+   731→   731→function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void }) {
+   732→   732→  const [bi, setBi] = useState<BIData | null>(null)
+   733→   733→  const [encartes, setEncartes] = useState<EncarteItem[]>([])
+   734→   734→  const [expandedEncarte, setExpandedEncarte] = useState<string | null>(null)
+   735→   735→  const [encarteProducts, setEncarteProducts] = useState<
+   736→   736→    Record<string, { id: string; nome: string; marca?: string | null; preco: string; unidade?: string | null }[]>
+   737→   737→  >({})
+   738→   738→
+   739→   739→  // Upload state
+   740→   740→  const [titulo, setTitulo] = useState('')
+   741→   741→  const [dataInicio, setDataInicio] = useState('')
+   742→   742→  const [dataFim, setDataFim] = useState('')
+   743→   743→  const [uploading, setUploading] = useState(false)
+   744→   744→
+   745→   745→  // Review state (pós-upload)
+   746→   746→  const [reviewOpen, setReviewOpen] = useState(false)
+   747→   747→  const [reviewEncarteId, setReviewEncarteId] = useState('')
+   748→   748→  const [reviewProdutos, setReviewProdutos] = useState<Array<{ nome: string; marca: string | null; preco: string; unidade: string | null }>>([])
+   749→   749→  const [reviewPublishing, setReviewPublishing] = useState(false)
+   750→   750→
+   751→   751→  // Delete encarte
+   752→   752→  const [deletingEncarte, setDeletingEncarte] = useState<string | null>(null)
+   753→   753→
+   754→   754→  // Delete produto individual
+   755→   755→  const [deletingProduto, setDeletingProduto] = useState<string | null>(null)
+   756→   756→
+   757→   757→  // Suporte state
+   758→   758→  const [suporteOpen, setSuporteOpen] = useState(false)
+   759→   759→  const [suporteCat, setSuporteCat] = useState('')
+   760→   760→  const [suporteAssunto, setSuporteAssunto] = useState('')
+   761→   761→  const [suporteMsg, setSuporteMsg] = useState('')
+   762→   762→  const [suporteSending, setSuporteSending] = useState(false)
+   763→   763→  const [suporteEnviado, setSuporteEnviado] = useState(false)
+   764→   764→
+   765→   765→  // Perfil state
+   766→   766→  const [perfilEndereco, setPerfilEndereco] = useState(conta.endereco || '')
+   767→   767→  const [perfilTelefone, setPerfilTelefone] = useState(conta.telefone || '')
+   768→   768→  const [savingPerfil, setSavingPerfil] = useState(false)
+   769→   769→
+   770→   770→  const handleSavePerfil = async () => {
+   771→   771→    setSavingPerfil(true)
+   772→   772→    try {
+   773→   773→      await api('/api/mercado/perfil', {
+   774→   774→        method: 'PUT',
+   775→   775→        body: JSON.stringify({ endereco: perfilEndereco, telefone: perfilTelefone }),
+   776→   776→      })
+   777→   777→      toast.success('Perfil atualizado com sucesso!')
+   778→   778→    } catch (err) {
+   779→   779→      toast.error(err instanceof Error ? err.message : 'Erro ao salvar perfil')
+   780→   780→    } finally {
+   781→   781→      setSavingPerfil(false)
+   782→   782→    }
+   783→   783→  }
+   784→   784→
+   785→   785→  const handleSuporte = async (e: React.FormEvent) => {
+   786→   786→    e.preventDefault()
+   787→   787→    setSuporteSending(true)
+   788→   788→    try {
+   789→   789→      await api('/api/contato', {
+   790→   790→        method: 'POST',
+   791→   791→        body: JSON.stringify({ categoria: suporteCat, assunto: suporteAssunto.trim(), mensagem: suporteMsg.trim() }),
+   792→   792→      })
+   793→   793→      toast.success('Mensagem enviada com sucesso!')
+   794→   794→      setSuporteEnviado(true)
+   795→   795→      setSuporteAssunto('')
+   796→   796→      setSuporteMsg('')
+   797→   797→      setSuporteCat('')
+   798→   798→      setTimeout(() => setSuporteEnviado(false), 5000)
+   799→   799→    } catch (err) {
+   800→   800→      toast.error(err instanceof Error ? err.message : 'Erro ao enviar')
+   801→   801→    } finally {
+   802→   802→      setSuporteSending(false)
+   803→   803→    }
+   804→   804→  }
+   805→   805→
+   806→   806→  // Refresh encartes
+   807→   807→  const refreshEncartes = useCallback(() => {
+   808→   808→    api<{ encartes: any[] }>('/api/mercado/meus-encartes')
+   809→   809→      .then((d) => setEncartes(d.encartes || []))
+   810→   810→      .catch(() => {})
+   811→   811→  }, [])
+   812→   812→
+   813→   813→  // Fetch BI
+   814→   814→  useEffect(() => {
+   815→   815→    api<BIData>('/api/mercado/bi')
+   816→   816→      .then(setBi)
+   817→   817→      .catch(() => {})
+   818→   818→  }, [])
+   819→   819→
+   820→   820→  // Fetch encartes com produtos do mercado logado
+   821→   821→  useEffect(() => {
+   822→   822→    refreshEncartes()
+   823→   823→  }, [conta.id, refreshEncartes])
+   824→   824→
+   825→   825→  // Upload PDF → abre revisão
+   826→   826→  const handleUpload = async (e: React.FormEvent) => {
+   827→   827→    e.preventDefault()
+   828→   828→    if (!titulo.trim()) {
+   829→   829→      toast.error('Informe o título do encarte')
+   830→   830→      return
+   831→   831→    }
+   832→   832→    if (!dataInicio) {
+   833→   833→      toast.error('Informe a data de início da promoção')
+   834→   834→      return
+   835→   835→    }
+   836→   836→    if (!dataFim) {
+   837→   837→      toast.error('Informe a data de fim da promoção')
+   838→   838→      return
+   839→   839→    }
+   840→   840→    if (new Date(dataFim) < new Date(dataInicio)) {
+   841→   841→      toast.error('Data fim deve ser igual ou posterior à data início')
+   842→   842→      return
+   843→   843→    }
+   844→   844→    const input = document.getElementById('pdf-upload') as HTMLInputElement
+   845→   845→    const file = input?.files?.[0]
+   846→   846→    if (!file) {
+   847→   847→      toast.error('Selecione um arquivo PDF')
+   848→   848→      return
+   849→   849→    }
+   850→   850→    setUploading(true)
+   851→   851→    try {
+   852→   852→      const fd = new FormData()
+   853→   853→      fd.append('titulo', titulo.trim())
+   854→   854→      fd.append('dataInicio', dataInicio)
+   855→   855→      fd.append('dataFim', dataFim)
+   856→   856→      fd.append('pdf', file)
+   857→   857→      const result = await api<{ ok: boolean; encarte: any; produtos?: any[]; log?: string; erro?: string }>('/api/mercado/encarte', {
+   858→   858→        method: 'POST',
+   859→   859→        body: fd,
+   860→   860→      })
+   861→   861→      if ((result as any).erro) {
+   862→   862→        toast.error((result as any).erro, { duration: 5000 })
+   863→   863→        return
+   864→   864→      }
+   865→   865→      const encarteId = result.encarte?.id
+   866→   866→      const produtos = result.produtos || []
+   867→   867→      if (produtos.length > 0) {
+   868→   868→        toast.success(`${produtos.length} produto(s) extraído(s) e salvo(s) com sucesso!`)
+   869→   869→        // Abre tela de revisão para edição opcional
+   870→   870→        setReviewEncarteId(encarteId)
+   871→   871→        setReviewProdutos(produtos)
+   872→   872→        setReviewOpen(true)
+   873→   873→      } else {
+   874→   874→        const logMsg = result.log || ''
+   875→   875→        toast.error(`Encarte enviado mas nenhum produto extraído. ${logMsg}`, { duration: 8000 })
+   876→   876→      }
+   877→   877→      setTitulo('')
+   878→   878→      setDataInicio('')
+   879→   879→      setDataFim('')
+   880→   880→      if (input) input.value = ''
+   881→   881→      // Refresh
+   882→   882→      refreshEncartes()
+   883→   883→    } catch (err) {
+   884→   884→      toast.error(err instanceof Error ? err.message : 'Erro ao enviar')
+   885→   885→    } finally {
+   886→   886→      setUploading(false)
+   887→   887→    }
+   888→   888→  }
+   889→   889→
+   890→   890→  // Publicar produtos após revisão
+   891→   891→  const handlePublish = async () => {
+   892→   892→    if (reviewProdutos.length === 0) {
+   893→   893→      toast.error('Nenhum produto para publicar')
+   894→   894→      return
+   895→   895→    }
+   896→   896→    setReviewPublishing(true)
+   897→   897→    try {
+   898→   898→      const res = await api<{ ok: boolean; totalSalvos: number }>(`/api/mercado/encarte/${reviewEncarteId}/publicar`, {
+   899→   899→        method: 'POST',
+   900→   900→        body: JSON.stringify({ produtos: reviewProdutos }),
+   901→   901→      })
+   902→   902→      toast.success(`${res.totalSalvos} produto(s) publicado(s) com sucesso!`)
+   903→   903→      setReviewOpen(false)
+   904→   904→      setReviewProdutos([])
+   905→   905→      setReviewEncarteId('')
+   906→   906→      refreshEncartes()
+   907→   907→    } catch (err) {
+   908→   908→      toast.error(err instanceof Error ? err.message : 'Erro ao publicar')
+   909→   909→    } finally {
+   910→   910→      setReviewPublishing(false)
+   911→   911→    }
+   912→   912→  }
+   913→   913→
+   914→   914→  // Excluir produto da revisão
+   915→   915→  const removeReviewProduto = (index: number) => {
+   916→   916→    setReviewProdutos((prev) => prev.filter((_, i) => i !== index))
+   917→   917→  }
+   918→   918→
+   919→   919→  // Excluir encarte
+   920→   920→  const handleDeleteEncarte = async (eid: string) => {
+   921→   921→    setDeletingEncarte(eid)
+   922→   922→    try {
+   923→   923→      await api<{ ok: boolean }>(`/api/mercado/encarte/${eid}`, { method: 'DELETE' })
+   924→   924→      toast.success('Encarte excluído!')
+   925→   925→      if (expandedEncarte === eid) setExpandedEncarte(null)
+   926→   926→      refreshEncartes()
+   927→   927→    } catch (err: any) {
+   928→   928→      const msg = err?.message || 'Erro ao excluir'
+   929→   929→      console.error('[deleteEncarte]', msg)
+   930→   930→      toast.error(msg, { duration: 5000 })
+   931→   931→    } finally {
+   932→   932→      setDeletingEncarte(null)
+   933→   933→    }
+   934→   934→  }
+   935→   935→
+   936→   936→  // Excluir produto individual de encarte já publicado
+   937→   937→  const handleDeleteProduto = async (produtoId: string, encarteId: string) => {
+   938→   938→    setDeletingProduto(produtoId)
+   939→   939→    try {
+   940→   940→      await api(`/api/mercado/produto/${produtoId}`, { method: 'DELETE' })
+   941→   941→      toast.success('Produto removido!')
+   942→   942→      // Refresh produtos do encarte
+   943→   943→      const prods = await api<any[]>(`/api/mercado/encarte/${encarteId}/produtos`)
+   944→   944→      setEncarteProducts((prev) => ({ ...prev, [encarteId]: prods }))
+   945→   945→      refreshEncartes()
+   946→   946→    } catch (err) {
+   947→   947→      toast.error(err instanceof Error ? err.message : 'Erro ao remover')
+   948→   948→    } finally {
+   949→   949→      setDeletingProduto(null)
+   950→   950→    }
+   951→   951→  }
+   952→   952→
+   953→   953→  // Toggle encarte
+   954→   954→  const toggleEncarte = async (eid: string) => {
+   955→   955→    if (expandedEncarte === eid) {
+   956→   956→      setExpandedEncarte(null)
+   957→   957→      return
+   958→   958→    }
+   959→   959→    try {
+   960→   960→      const prods = await api<
+   961→   961→        { id: string; nome: string; marca?: string | null; preco: string; unidade?: string | null }[]
+   962→   962→      >(`/api/mercado/encarte/${eid}/produtos`)
+   963→   963→      setEncarteProducts((prev) => ({ ...prev, [eid]: prods }))
+   964→   964→      setExpandedEncarte(eid)
+   965→   965→    } catch {
+   966→   966→      toast.error('Erro ao carregar produtos')
+   967→   967→    }
+   968→   968→  }
+   969→   969→
+   970→   970→  // Pilot countdown helper
+   971→   971→  const pilotoDaysLeft = conta.pilotoFim
+   972→   972→    ? Math.max(0, Math.ceil((new Date(conta.pilotoFim).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+   973→   973→    : null
+   974→   974→
+   975→   975→  const isPilotoActive = conta.status === 'piloto' && pilotoDaysLeft !== null && pilotoDaysLeft > 0
+   976→   976→  const isPilotoExpirado = conta.statusEfetivo === 'piloto_expirado'
+   977→   977→  const isAtivo = conta.status === 'ativo'
+   978→   978→
+   979→   979→  return (
+   980→   980→    <div className="space-y-6">
+   981→   981→      <Tabs defaultValue="painel">
+   982→   982→        <TabsList className="w-full grid grid-cols-3">
+   983→   983→          <TabsTrigger value="painel" className="text-xs gap-1.5">
+   984→   984→            <BarChart3 className="h-3.5 w-3.5" />
+   985→   985→            Painel
+   986→   986→          </TabsTrigger>
+   987→   987→          <TabsTrigger value="conta" className="text-xs gap-1.5">
+   988→   988→            <CreditCard className="h-3.5 w-3.5" />
+   989→   989→            Conta
+   990→   990→          </TabsTrigger>
+   991→   991→          <TabsTrigger value="perfil" className="text-xs gap-1.5">
+   992→   992→            <UserCircle className="h-3.5 w-3.5" />
+   993→   993→            Perfil
+   994→   994→          </TabsTrigger>
+   995→   995→        </TabsList>
+   996→   996→
+   997→   997→        {/* ── Tab: Painel ── */}
+   998→   998→        <TabsContent value="painel" className="space-y-6 mt-4">
+   999→   999→      {/* Header */}
+  1000→  1000→      <div className="flex items-center justify-between">
+  1001→  1001→        <div>
+  1002→  1002→          <h2 className="text-lg font-bold text-gray-800">{conta.nome}</h2>
+  1003→  1003→          <div className="flex items-center gap-2 mt-1">
+  1004→  1004→            <MapPin className="h-3.5 w-3.5 text-gray-400" />
+  1005→  1005→            <span className="text-sm text-gray-500">
+  1006→  1006→              {conta.cidade}/{conta.estado}
+  1007→  1007→            </span>
+  1008→  1008→            {statusBadge(conta.statusEfetivo)}
+  1009→  1009→          </div>
+  1010→  1010→        </div>
+  1011→  1011→        <Button
+  1012→  1012→          variant="outline"
+  1013→  1013→          size="sm"
+  1014→  1014→          onClick={onLogout}
+  1015→  1015→          className="text-red-500 hover:text-red-600 hover:bg-red-50 text-xs"
+  1016→  1016→        >
+  1017→  1017→          Sair
+  1018→  1018→        </Button>
+  1019→  1019→      </div>
+  1020→  1020→
+  1021→  1021→      {/* Stats cards */}
+  1022→  1022→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  1023→  1023→        {[
+  1024→  1024→          {
+  1025→  1025→            label: 'Encartes',
+  1026→  1026→            value: conta.totalEncartes,
+  1027→  1027→            icon: <FileText className="h-5 w-5" />,
+  1028→  1028→            color: 'text-blue-600 bg-blue-50',
+  1029→  1029→          },
+  1030→  1030→          {
+  1031→  1031→            label: 'Produtos',
+  1032→  1032→            value: conta.totalProdutos,
+  1033→  1033→            icon: <Package className="h-5 w-5" />,
+  1034→  1034→            color: 'text-purple-600 bg-purple-50',
+  1035→  1035→          },
+  1036→  1036→          {
+  1037→  1037→            label: 'Cliques',
+  1038→  1038→            value: conta.totalCliques,
+  1039→  1039→            icon: <MousePointerClick className="h-5 w-5" />,
+  1040→  1040→            color: 'text-amber-600 bg-amber-50',
+  1041→  1041→          },
+  1042→  1042→          {
+  1043→  1043→            label: 'Mensalidade',
+  1044→  1044→            value: `R$${conta.mensalidade}`,
+  1045→  1045→            icon: <BarChart3 className="h-5 w-5" />,
+  1046→  1046→            color: 'text-red-600 bg-orange-50',
+  1047→  1047→            badge: (conta.statusEfetivo === 'piloto' || conta.status === 'piloto')
+  1048→  1048→              ? 'Piloto — isento' : undefined,
+  1049→  1049→          },
+  1050→  1050→        ].map((s) => (
+  1051→  1051→          <motion.div
+  1052→  1052→            key={s.label}
+  1053→  1053→            whileHover={{ y: -2 }}
+  1054→  1054→            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+  1055→  1055→          >
+  1056→  1056→            <Card className="border-gray-100 relative overflow-visible">
+  1057→  1057→              <CardContent className="p-4">
+  1058→  1058→                {(s as any).badge && (
+  1059→  1059→                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 z-10">
+  1060→  1060→                    <Badge className="bg-blue-500 text-white text-[9px] px-2 py-0.5 shadow-sm whitespace-nowrap">
+  1061→  1061→                      {(s as any).badge}
+  1062→  1062→                    </Badge>
+  1063→  1063→                  </div>
+  1064→  1064→                )}
+  1065→  1065→                <div className="flex items-center justify-between mb-2">
+  1066→  1066→                  <div className={cn('p-2 rounded-lg', s.color)}>{s.icon}</div>
+  1067→  1067→                </div>
+  1068→  1068→                <p className="text-2xl font-bold text-gray-800">{s.value}</p>
+  1069→  1069→                <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+  1070→  1070→              </CardContent>
+  1071→  1071→            </Card>
+  1072→  1072→          </motion.div>
+  1073→  1073→        ))}
+  1074→  1074→      </div>
+  1075→  1075→
+  1076→  1076→      {/* PDF Upload */}
+  1077→  1077→      <Card className="border-gray-100">
+  1078→  1078→        <CardHeader className="pb-3 pt-4 px-4">
+  1079→  1079→          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1080→  1080→            <Upload className="h-4 w-4 text-red-600" />
+  1081→  1081→            Enviar Encarte
+  1082→  1082→          </CardTitle>
+  1083→  1083→        </CardHeader>
+  1084→  1084→        <CardContent className="px-4 pb-4">
+  1085→  1085→          {/* Aviso sobre formato do PDF */}
+  1086→  1086→          <div className="mb-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-800 leading-relaxed">
+  1087→  1087→            <span className="text-amber-500 text-base mt-0.5 shrink-0">⚠</span>
+  1088→  1088→            <span>
+  1089→  1089→              <strong>Formato do PDF:</strong> o encarte precisa conter os produtos em <strong>texto</strong> (nome + preço). Encartes feitos no Canva, Designer ou outras ferramentas de design que exportam os produtos como <strong>imagens</strong> (textos transformados em figura) não serão lidos pelo sistema. Certifique-se de que o PDF tenha texto selecionável.
+  1090→  1090→            </span>
+  1091→  1091→          </div>
+  1092→  1092→          {uploading ? (
+  1093→  1093→            <UploadLoading />
+  1094→  1094→          ) : (
+  1095→  1095→            <form onSubmit={handleUpload} className="flex flex-col gap-3">
+  1096→  1096→            <Input
+  1097→  1097→              placeholder="Título do encarte"
+  1098→  1098→              value={titulo}
+  1099→  1099→              onChange={(e) => setTitulo(e.target.value)}
+  1100→  1100→              className="h-10"
+  1101→  1101→            />
+  1102→  1102→            <div className="grid grid-cols-2 gap-3">
+  1103→  1103→              <div className="space-y-1">
+  1104→  1104→                <Label className="text-xs text-gray-600">Início da promoção *</Label>
+  1105→  1105→                <Input
+  1106→  1106→                  type="date"
+  1107→  1107→                  value={dataInicio}
+  1108→  1108→                  onChange={(e) => setDataInicio(e.target.value)}
+  1109→  1109→                  className="h-10 text-sm"
+  1110→  1110→                  required
+  1111→  1111→                />
+  1112→  1112→              </div>
+  1113→  1113→              <div className="space-y-1">
+  1114→  1114→                <Label className="text-xs text-gray-600">Fim da promoção *</Label>
+  1115→  1115→                <Input
+  1116→  1116→                  type="date"
+  1117→  1117→                  value={dataFim}
+  1118→  1118→                  onChange={(e) => setDataFim(e.target.value)}
+  1119→  1119→                  className="h-10 text-sm"
+  1120→  1120→                  required
+  1121→  1121→                />
+  1122→  1122→              </div>
+  1123→  1123→            </div>
+  1124→  1124→            <div className="flex flex-col sm:flex-row gap-3">
+  1125→  1125→              <input
+  1126→  1126→                id="pdf-upload"
+  1127→  1127→                type="file"
+  1128→  1128→                accept=".pdf"
+  1129→  1129→                className="text-xs text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-orange-50 file:text-red-700 hover:file:bg-red-50 flex-1"
+  1130→  1130→              />
+  1131→  1131→              <Button
+  1132→  1132→                type="submit"
+  1133→  1133→                className="bg-red-600 hover:bg-red-700 text-white h-10 shrink-0"
+  1134→  1134→                disabled={uploading}
+  1135→  1135→              >
+  1136→  1136→                {uploading ? (
+  1137→  1137→                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+  1138→  1138→                ) : (
+  1139→  1139→                  <Upload className="h-4 w-4 mr-2" />
+  1140→  1140→                )}
+  1141→  1141→                Enviar
+  1142→  1142→              </Button>
+  1143→  1143→            </div>
+  1144→  1144→          </form>
+  1145→  1145→          )}
+  1146→  1146→        </CardContent>
+  1147→  1147→      </Card>
+  1148→  1148→
+  1149→  1149→      {/* BI Dashboard */}
+  1150→  1150→      {bi && (
+  1151→  1151→        <Card className="border-gray-100">
+  1152→  1152→          <CardHeader className="pb-3 pt-4 px-4">
+  1153→  1153→            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1154→  1154→              <BarChart3 className="h-4 w-4 text-red-600" />
+  1155→  1155→              Dashboard BI
+  1156→  1156→            </CardTitle>
+  1157→  1157→          </CardHeader>
+  1158→  1158→          <CardContent className="px-4 pb-4 space-y-4">
+  1159→  1159→            {/* Weekly clicks + trend */}
+  1160→  1160→            <div className="flex items-center gap-4">
+  1161→  1161→              <div>
+  1162→  1162→                <p className="text-xs text-gray-500">Cliques semanais</p>
+  1163→  1163→                <p className="text-2xl font-bold text-gray-800">
+  1164→  1164→                  {bi.cliquesSemana.length > 0
+  1165→  1165→                    ? bi.cliquesSemana[bi.cliquesSemana.length - 1].total
+  1166→  1166→                    : 0}
+  1167→  1167→                </p>
+  1168→  1168→              </div>
+  1169→  1169→              <div className="flex items-center gap-1">
+  1170→  1170→                {bi.trend >= 0 ? (
+  1171→  1171→                  <TrendingUp className="h-4 w-4 text-red-500" />
+  1172→  1172→                ) : (
+  1173→  1173→                  <TrendingDown className="h-4 w-4 text-red-500" />
+  1174→  1174→                )}
+  1175→  1175→                <span
+  1176→  1176→                  className={cn(
+  1177→  1177→                    'text-sm font-semibold',
+  1178→  1178→                    bi.trend >= 0 ? 'text-red-600' : 'text-red-600',
+  1179→  1179→                  )}
+  1180→  1180→                >
+  1181→  1181→                  {bi.trend >= 0 ? '+' : ''}
+  1182→  1182→                  {bi.trend}%
+  1183→  1183→                </span>
+  1184→  1184→              </div>
+  1185→  1185→              <div className="ml-auto text-right">
+  1186→  1186→                <p className="text-xs text-gray-500">Região</p>
+  1187→  1187→                <p className="text-sm font-medium text-gray-700">
+  1188→  1188→                  {bi.regiao || '—'}
+  1189→  1189→                </p>
+  1190→  1190→              </div>
+  1191→  1191→            </div>
+  1192→  1192→
+  1193→  1193→            {/* Top product */}
+  1194→  1194→            {bi.topProdutos.length > 0 && (
+  1195→  1195→              <div>
+  1196→  1196→                <p className="text-xs text-gray-500 mb-1">Produto mais clicado</p>
+  1197→  1197→                <p className="text-sm font-semibold text-gray-800">
+  1198→  1198→                  {bi.topProdutos[0].nome}
+  1199→  1199→                  {bi.topProdutos[0].marca &&
+  1200→  1200→                    ` · ${bi.topProdutos[0].marca}`}
+  1201→  1201→                </p>
+  1202→  1202→                <p className="text-xs text-gray-400">
+  1203→  1203→                  {bi.topProdutos[0].cliques} cliques
+  1204→  1204→                </p>
+  1205→  1205→              </div>
+  1206→  1206→            )}
+  1207→  1207→
+  1208→  1208→            <Separator />
+  1209→  1209→
+  1210→  1210→            {/* Bar Chart - Top 10 produtos */}
+  1211→  1211→            {bi.topProdutos.length > 0 && (
+  1212→  1212→              <div>
+  1213→  1213→                <p className="text-xs text-gray-500 mb-3">
+  1214→  1214→                  Top 10 produtos por cliques
+  1215→  1215→                </p>
+  1216→  1216→                <div className="h-64">
+  1217→  1217→                  <ResponsiveContainer width="100%" height="100%">
+  1218→  1218→                    <BarChart
+  1219→  1219→                      data={bi.topProdutos.slice(0, 10)}
+  1220→  1220→                      margin={{ top: 0, right: 0, left: 0, bottom: 40 }}
+  1221→  1221→                    >
+  1222→  1222→                      <CartesianGrid
+  1223→  1223→                        strokeDasharray="3 3"
+  1224→  1224→                        stroke="#f0f0f0"
+  1225→  1225→                      />
+  1226→  1226→                      <XAxis
+  1227→  1227→                        dataKey="nome"
+  1228→  1228→                        tick={{ fontSize: 10, fill: '#9ca3af' }}
+  1229→  1229→                        angle={-35}
+  1230→  1230→                        textAnchor="end"
+  1231→  1231→                        interval={0}
+  1232→  1232→                        height={60}
+  1233→  1233→                      />
+  1234→  1234→                      <YAxis
+  1235→  1235→                        tick={{ fontSize: 10, fill: '#9ca3af' }}
+  1236→  1236→                        width={30}
+  1237→  1237→                      />
+  1238→  1238→                      <Tooltip
+  1239→  1239→                        contentStyle={{
+  1240→  1240→                          borderRadius: 8,
+  1241→  1241→                          border: '1px solid #e5e7eb',
+  1242→  1242→                          fontSize: 12,
+  1243→  1243→                        }}
+  1244→  1244→                        formatter={(value: number) => [
+  1245→  1245→                          `${value} cliques`,
+  1246→  1246→                          'Cliques',
+  1247→  1247→                        ]}
+  1248→  1248→                      />
+  1249→  1249→                      <Bar dataKey="cliques" radius={[4, 4, 0, 0]}>
+  1250→  1250→                        {bi.topProdutos.slice(0, 10).map((_, i) => (
+  1251→  1251→                          <Cell
+  1252→  1252→                            key={i}
+  1253→  1253→                            fill={i === 0 ? '#dc2626' : '#fb923c'}
+  1254→  1254→                          />
+  1255→  1255→                        ))}
+  1256→  1256→                      </Bar>
+  1257→  1257→                    </BarChart>
+  1258→  1258→                  </ResponsiveContainer>
+  1259→  1259→                </div>
+  1260→  1260→              </div>
+  1261→  1261→            )}
+  1262→  1262→
+  1263→  1263→            {bi.topProdutos.length === 0 && (
+  1264→  1264→              <p className="text-sm text-gray-400 text-center py-6">
+  1265→  1265→                Nenhum clique registrado ainda
+  1266→  1266→              </p>
+  1267→  1267→            )}
+  1268→  1268→          </CardContent>
+  1269→  1269→        </Card>
+  1270→  1270→      )}
+  1271→  1271→
+  1272→  1272→      {/* Encartes list */}
+  1273→  1273→      <Card className="border-gray-100">
+  1274→  1274→        <CardHeader className="pb-3 pt-4 px-4">
+  1275→  1275→          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1276→  1276→            <FileText className="h-4 w-4 text-red-600" />
+  1277→  1277→            Meus Encartes ({encartes.length})
+  1278→  1278→          </CardTitle>
+  1279→  1279→        </CardHeader>
+  1280→  1280→        <CardContent className="px-4 pb-4">
+  1281→  1281→          {encartes.length === 0 ? (
+  1282→  1282→            <p className="text-sm text-gray-400 text-center py-6">
+  1283→  1283→              Nenhum encarte enviado ainda
+  1284→  1284→            </p>
+  1285→  1285→          ) : (
+  1286→  1286→            <div className="space-y-2 max-h-96 overflow-y-auto">
+  1287→  1287→              {encartes.map((e) => {
+  1288→  1288→                const prods = (e as any).produtos || []
+  1289→  1289→                const numProdutos = prods.length || (e as any)._count?.produtos || 0
+  1290→  1290→                return (
+  1291→  1291→                <div
+  1292→  1292→                  key={e.id}
+  1293→  1293→                  className="border border-gray-100 rounded-lg overflow-hidden"
+  1294→  1294→                >
+  1295→  1295→                  <button
+  1296→  1296→                    className="w-full text-left px-3 py-2.5 flex items-center justify-between hover:bg-gray-50 transition-colors"
+  1297→  1297→                    onClick={() => toggleEncarte(e.id)}
+  1298→  1298→                  >
+  1299→  1299→                    <div className="flex items-center gap-2 min-w-0">
+  1300→  1300→                      <FileText className="h-4 w-4 text-red-500 shrink-0" />
+  1301→  1301→                      <div className="min-w-0">
+  1302→  1302→                        <div className="flex items-center gap-1.5">
+  1303→  1303→                          <p className="text-sm font-medium truncate">
+  1304→  1304→                            {e.titulo}
+  1305→  1305→                          </p>
+  1306→  1306→                          {(e as any).expirado && (
+  1307→  1307→                            <Badge variant="outline" className="text-[9px] text-gray-400 border-gray-300 shrink-0">
+  1308→  1308→                              Expirado
+  1309→  1309→                            </Badge>
+  1310→  1310→                          )}
+  1311→  1311→                        </div>
+  1312→  1312→                        <p className="text-xs text-gray-400">
+  1313→  1313→                          {numProdutos} produto{numProdutos !== 1 ? 's' : ''} ·{' '}
+  1314→  1314→                          {extracaoLabel(e.statusExtracao)}
+  1315→  1315→                          {(e as any).dataInicio && (
+  1316→  1316→                            <> · {(e as any).dataInicio.split('T')[0].split('-').reverse().join('/')} — {(e as any).dataFim ? (e as any).dataFim.split('T')[0].split('-').reverse().join('/') : '—'}</>
+  1317→  1317→                          )}
+  1318→  1318→                        </p>
+  1319→  1319→                      </div>
+  1320→  1320→                    </div>
+  1321→  1321→                    <div className="flex items-center gap-2 shrink-0">
+  1322→  1322→                      {(e as any).pdfPath && (
+  1323→  1323→                        <a
+  1324→  1324→                          href={`/api/encarte/${e.id}/pdf`}
+  1325→  1325→                          target="_blank"
+  1326→  1326→                          rel="noopener noreferrer"
+  1327→  1327→                          onClick={(ev) => ev.stopPropagation()}
+  1328→  1328→                          className="text-[10px] bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-md font-medium"
+  1329→  1329→                        >
+  1330→  1330→                          Ver PDF
+  1331→  1331→                        </a>
+  1332→  1332→                      )}
+  1333→  1333→                      <button
+  1334→  1334→                        onClick={(ev) => { ev.stopPropagation(); if (confirm('Excluir este encarte e todos os produtos?')) handleDeleteEncarte(e.id) }}
+  1335→  1335→                        disabled={deletingEncarte === e.id}
+  1336→  1336→                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+  1337→  1337→                        title="Excluir encarte"
+  1338→  1338→                      >
+  1339→  1339→                        {deletingEncarte === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+  1340→  1340→                      </button>
+  1341→  1341→                      <Badge
+  1342→  1342→                        variant={
+  1343→  1343→                          e.statusExtracao === 'concluido'
+  1344→  1344→                            ? 'default'
+  1345→  1345→                            : e.statusExtracao === 'erro'
+  1346→  1346→                              ? 'destructive'
+  1347→  1347→                              : 'secondary'
+  1348→  1348→                        }
+  1349→  1349→                        className="text-[10px]"
+  1350→  1350→                      >
+  1351→  1351→                        {extracaoLabel(e.statusExtracao)}
+  1352→  1352→                      </Badge>
+  1353→  1353→                      {expandedEncarte === e.id ? (
+  1354→  1354→                        <ChevronUp className="h-4 w-4 text-gray-400" />
+  1355→  1355→                      ) : (
+  1356→  1356→                        <ChevronDown className="h-4 w-4 text-gray-400" />
+  1357→  1357→                      )}
+  1358→  1358→                    </div>
+  1359→  1359→                  </button>
+  1360→  1360→                  <AnimatePresence>
+  1361→  1361→                    {expandedEncarte === e.id && prods.length > 0 && (
+  1362→  1362→                        <motion.div
+  1363→  1363→                          initial={{ height: 0, opacity: 0 }}
+  1364→  1364→                          animate={{ height: 'auto', opacity: 1 }}
+  1365→  1365→                          exit={{ height: 0, opacity: 0 }}
+  1366→  1366→                          transition={{ duration: 0.2 }}
+  1367→  1367→                          className="overflow-hidden"
+  1368→  1368→                        >
+  1369→  1369→                          <div className="border-t border-gray-50 max-h-60 overflow-y-auto">
+  1370→  1370→                            {prods.map((p: any) => (
+  1371→  1371→                                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-50 last:border-0">
+  1372→  1372→                                <div className="min-w-0 flex-1">
+  1373→  1373→                                  <p className="text-xs font-medium truncate">
+  1374→  1374→                                    {p.nome}
+  1375→  1375→                                    {p.marca && (
+  1376→  1376→                                      <span className="text-gray-400 font-normal ml-1">
+  1377→  1377→                                        · {p.marca}
+  1378→  1378→                                      </span>
+  1379→  1379→                                    )}
+  1380→  1380→                                  </p>
+  1381→  1381→                                  {p.unidade && (
+  1382→  1382→                                    <p className="text-[10px] text-gray-400">
+  1383→  1383→                                      {p.unidade}
+  1384→  1384→                                    </p>
+  1385→  1385→                                  )}
+  1386→  1386→                                </div>
+  1387→  1387→                                <div className="flex items-center gap-2 shrink-0 ml-2">
+  1388→  1388→                                  <span className="text-xs font-bold text-red-600">
+  1389→  1389→                                    {p.preco}
+  1390→  1390→                                  </span>
+  1391→  1391→                                  <button
+  1392→  1392→                                    onClick={(ev) => { ev.stopPropagation(); if (confirm('Excluir este produto?')) handleDeleteProduto(p.id, e.id) }}
+  1393→  1393→                                    disabled={deletingProduto === p.id}
+  1394→  1394→                                    className="text-gray-300 hover:text-red-500 transition-colors"
+  1395→  1395→                                    title="Excluir produto"
+  1396→  1396→                                  >
+  1397→  1397→                                    {deletingProduto === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+  1398→  1398→                                  </button>
+  1399→  1399→                                </div>
+  1400→  1400→                              </div>
+  1401→  1401→                            ))}
+  1402→  1402→                          </div>
+  1403→  1403→                        </motion.div>
+  1404→  1404→                      )}
+  1405→  1405→                  </AnimatePresence>
+  1406→  1406→                </div>
+  1407→  1407→                )
+  1408→  1408→              })}
+  1409→  1409→            </div>
+  1410→  1410→          )}
+  1411→  1411→        </CardContent>
+  1412→  1412→      </Card>
+  1413→  1413→
+  1414→  1414→      {/* Suporte ── */}
+  1415→  1415→      <Card className="border-blue-100">
+  1416→  1416→        <CardHeader className="pb-3 pt-4 px-4 cursor-pointer select-none" onClick={() => setSuporteOpen(!suporteOpen)}>
+  1417→  1417→          <CardTitle className="text-sm font-semibold flex items-center justify-between">
+  1418→  1418→            <span className="flex items-center gap-2">
+  1419→  1419→              <Headphones className="h-4 w-4 text-blue-600" />
+  1420→  1420→              Suporte
+  1421→  1421→            </span>
+  1422→  1422→            {suporteOpen ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+  1423→  1423→          </CardTitle>
+  1424→  1424→        </CardHeader>
+  1425→  1425→        <AnimatePresence>
+  1426→  1426→          {suporteOpen && (
+  1427→  1427→            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+  1428→  1428→              <CardContent className="px-4 pb-4 space-y-3 border-t border-blue-50">
+  1429→  1429→                {suporteEnviado ? (
+  1430→  1430→                  <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+  1431→  1431→                    <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+  1432→  1432→                    <p className="text-sm text-green-800">Mensagem enviada! Responderemos em breve.</p>
+  1433→  1433→                  </div>
+  1434→  1434→                ) : (
+  1435→  1435→                  <form onSubmit={handleSuporte} className="space-y-3">
+  1436→  1436→                    <p className="text-xs text-blue-700/70">Sua mensagem será identificada com o mercado <strong>{conta.nome}</strong>.</p>
+  1437→  1437→                    <Select value={suporteCat} onValueChange={setSuporteCat}>
+  1438→  1438→                      <SelectTrigger className="h-10"><SelectValue placeholder="Categoria" /></SelectTrigger>
+  1439→  1439→                      <SelectContent>
+  1440→  1440→                        <SelectItem value="Sugestão">Sugestão</SelectItem>
+  1441→  1441→                        <SelectItem value="Problemas Técnicos">Problemas Técnicos</SelectItem>
+  1442→  1442→                        <SelectItem value="Encarte com falha no upload">Encarte com falha no upload</SelectItem>
+  1443→  1443→                        <SelectItem value="Outros">Outros</SelectItem>
+  1444→  1444→                      </SelectContent>
+  1445→  1445→                    </Select>
+  1446→  1446→                    <Input placeholder="Assunto" value={suporteAssunto} onChange={e => setSuporteAssunto(e.target.value)} className="h-10" />
+  1447→  1447→                    <textarea placeholder="Descreva sua solicitação..." value={suporteMsg} onChange={e => setSuporteMsg(e.target.value)} rows={4} className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300" />
+  1448→  1448→                    <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm" disabled={suporteSending || !suporteCat || !suporteAssunto.trim() || !suporteMsg.trim()}>
+  1449→  1449→                      {suporteSending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+  1450→  1450→                      Enviar Mensagem
+  1451→  1451→                    </Button>
+  1452→  1452→                  </form>
+  1453→  1453→                )}
+  1454→  1454→              </CardContent>
+  1455→  1455→            </motion.div>
+  1456→  1456→          )}
+  1457→  1457→        </AnimatePresence>
+  1458→  1458→      </Card>
+  1459→  1459→        </TabsContent>
+  1460→  1460→
+  1461→  1461→        {/* ── Tab: Conta ── */}
+  1462→  1462→        <TabsContent value="conta" className="space-y-4 mt-4">
+  1463→  1463→          {/* Market info */}
+  1464→  1464→          <Card className="border-gray-100">
+  1465→  1465→            <CardHeader className="pb-3 pt-4 px-4">
+  1466→  1466→              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1467→  1467→                <CreditCard className="h-4 w-4 text-red-600" />
+  1468→  1468→                Informações da Conta
+  1469→  1469→              </CardTitle>
+  1470→  1470→            </CardHeader>
+  1471→  1471→            <CardContent className="px-4 pb-4 space-y-2.5">
+  1472→  1472→              <div className="flex items-start justify-between">
+  1473→  1473→                <div>
+  1474→  1474→                  <p className="text-sm font-semibold text-gray-800">{conta.nome}</p>
+  1475→  1475→                  <p className="text-xs text-gray-400">CNPJ: XX.XXX.XXX/XXXX-XX</p>
+  1476→  1476→                </div>
+  1477→  1477→                {statusBadge(conta.statusEfetivo)}
+  1478→  1478→              </div>
+  1479→  1479→              <Separator />
+  1480→  1480→              <div className="grid gap-2 text-sm">
+  1481→  1481→                <div className="flex items-center gap-2">
+  1482→  1482→                  <MapPin className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+  1483→  1483→                  <span className="text-gray-600">{conta.cidade}/{conta.estado}</span>
+  1484→  1484→                </div>
+  1485→  1485→                {conta.endereco && (
+  1486→  1486→                  <div className="flex items-center gap-2">
+  1487→  1487→                    <MapPin className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+  1488→  1488→                    <span className="text-gray-600">{conta.endereco}</span>
+  1489→  1489→                  </div>
+  1490→  1490→                )}
+  1491→  1491→                <div className="flex items-center gap-2">
+  1492→  1492→                  <span className="text-xs text-gray-400 w-3.5 shrink-0">✉</span>
+  1493→  1493→                  <span className="text-gray-600">{conta.emailLogin}</span>
+  1494→  1494→                </div>
+  1495→  1495→                {conta.telefone && (
+  1496→  1496→                  <div className="flex items-center gap-2">
+  1497→  1497→                    <span className="text-xs text-gray-400 w-3.5 shrink-0">☎</span>
+  1498→  1498→                    <span className="text-gray-600">{conta.telefone}</span>
+  1499→  1499→                  </div>
+  1500→  1500→                )}
+  1501→  1501→              </div>
+  1502→  1502→            </CardContent>
+  1503→  1503→          </Card>
+  1504→  1504→
+  1505→  1505→          {/* Pilot period */}
+  1506→  1506→          {isPilotoActive && (
+  1507→  1507→            <Card className="border-blue-200 bg-blue-50/50">
+  1508→  1508→              <CardContent className="p-4">
+  1509→  1509→                <div className="flex items-center gap-2 mb-2">
+  1510→  1510→                  <Calendar className="h-4 w-4 text-blue-600" />
+  1511→  1511→                  <p className="text-sm font-semibold text-blue-800">Período Piloto</p>
+  1512→  1512→                </div>
+  1513→  1513→                <p className="text-xs text-blue-700">
+  1514→  1514→                  Seu período piloto termina em <strong className="text-blue-900">{pilotoDaysLeft} dia{pilotoDaysLeft !== 1 ? 's' : ''}</strong>
+  1515→  1515→                  {conta.pilotoFim && (
+  1516→  1516→                    <> ({new Date(conta.pilotoFim).toLocaleDateString('pt-BR')})</>
+  1517→  1517→                  )}
+  1518→  1518→                </p>
+  1519→  1519→                {conta.pilotoInicio && (
+  1520→  1520→                  <p className="text-[10px] text-blue-500 mt-1">
+  1521→  1521→                    Início: {new Date(conta.pilotoInicio).toLocaleDateString('pt-BR')}
+  1522→  1522→                  </p>
+  1523→  1523→                )}
+  1524→  1524→              </CardContent>
+  1525→  1525→            </Card>
+  1526→  1526→          )}
+  1527→  1527→
+  1528→  1528→          {isPilotoExpirado && (
+  1529→  1529→            <Card className="border-orange-300 bg-orange-50">
+  1530→  1530→              <CardContent className="p-4 space-y-3">
+  1531→  1531→                <div className="flex items-center gap-2">
+  1532→  1532→                  <Calendar className="h-4 w-4 text-orange-600" />
+  1533→  1533→                  <p className="text-sm font-semibold text-orange-800">Período Piloto Expirado</p>
+  1534→  1534→                </div>
+  1535→  1535→                <p className="text-xs text-orange-700">
+  1536→  1536→                  Seu período piloto expirou! Para continuar usando a plataforma, você precisa assinar o contrato PJ e efetuar o pagamento mensal.
+  1537→  1537→                </p>
+  1538→  1538→                <Button
+  1539→  1539→                  variant="outline"
+  1540→  1540→                  size="sm"
+  1541→  1541→                  className="border-orange-300 text-orange-700 hover:bg-orange-100 text-xs"
+  1542→  1542→                  onClick={() => toast.info('Contrato PJ será disponibilizado em breve (integração com Asaas em andamento).')}
+  1543→  1543→                >
+  1544→  1544→                  <FileText className="h-3.5 w-3.5 mr-1.5" />
+  1545→  1545→                  Ver Contrato PJ
+  1546→  1546→                </Button>
+  1547→  1547→              </CardContent>
+  1548→  1548→            </Card>
+  1549→  1549→          )}
+  1550→  1550→
+  1551→  1551→          {isAtivo && (
+  1552→  1552→            <Card className="border-green-200 bg-green-50">
+  1553→  1553→              <CardContent className="p-4 space-y-3">
+  1554→  1554→                <div className="flex items-center gap-2">
+  1555→  1555→                  <CheckCircle className="h-4 w-4 text-green-600" />
+  1556→  1556→                  <p className="text-sm font-semibold text-green-800">Conta Ativa — contrato PJ assinado.</p>
+  1557→  1557→                </div>
+  1558→  1558→                <Button
+  1559→  1559→                  variant="outline"
+  1560→  1560→                  size="sm"
+  1561→  1561→                  className="border-green-300 text-green-700 hover:bg-green-100 text-xs"
+  1562→  1562→                  onClick={() => toast.info('Contrato PJ será disponibilizado em breve (integração com Asaas em andamento).')}
+  1563→  1563→                >
+  1564→  1564→                  <FileText className="h-3.5 w-3.5 mr-1.5" />
+  1565→  1565→                  Ver Contrato PJ
+  1566→  1566→                </Button>
+  1567→  1567→              </CardContent>
+  1568→  1568→            </Card>
+  1569→  1569→          )}
+  1570→  1570→
+  1571→  1571→          {/* Monthly fee */}
+  1572→  1572→          <Card className="border-gray-100">
+  1573→  1573→            <CardHeader className="pb-3 pt-4 px-4">
+  1574→  1574→              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1575→  1575→                <CreditCard className="h-4 w-4 text-red-600" />
+  1576→  1576→                Mensalidade
+  1577→  1577→              </CardTitle>
+  1578→  1578→            </CardHeader>
+  1579→  1579→            <CardContent className="px-4 pb-4">
+  1580→  1580→              <div className="flex items-center gap-3">
+  1581→  1581→                <span className={cn(
+  1582→  1582→                  'text-xl font-bold',
+  1583→  1583→                  (conta.statusEfetivo === 'piloto' || conta.status === 'piloto') && 'line-through text-gray-400'
+  1584→  1584→                )}>
+  1585→  1585→                  R$ {conta.mensalidade},00/mês
+  1586→  1586→                </span>
+  1587→  1587→                {(conta.statusEfetivo === 'piloto' || conta.status === 'piloto') && (
+  1588→  1588→                  <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">
+  1589→  1589→                    Isento durante o piloto
+  1590→  1590→                  </Badge>
+  1591→  1591→                )}
+  1592→  1592→              </div>
+  1593→  1593→            </CardContent>
+  1594→  1594→          </Card>
+  1595→  1595→        </TabsContent>
+  1596→  1596→
+  1597→  1597→        {/* ── Tab: Perfil ── */}
+  1598→  1598→        <TabsContent value="perfil" className="space-y-4 mt-4">
+  1599→  1599→          <Card className="border-gray-100">
+  1600→  1600→            <CardHeader className="pb-3 pt-4 px-4">
+  1601→  1601→              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1602→  1602→                <UserCircle className="h-4 w-4 text-red-600" />
+  1603→  1603→                Editar Perfil
+  1604→  1604→              </CardTitle>
+  1605→  1605→            </CardHeader>
+  1606→  1606→            <CardContent className="px-4 pb-4 space-y-4">
+  1607→  1607→              <div className="space-y-2">
+  1608→  1608→                <Label className="text-xs text-gray-600">Endereço</Label>
+  1609→  1609→                <Input
+  1610→  1610→                  placeholder="Rua, número, bairro..."
+  1611→  1611→                  value={perfilEndereco}
+  1612→  1612→                  onChange={(e) => setPerfilEndereco(e.target.value)}
+  1613→  1613→                  className="h-10"
+  1614→  1614→                />
+  1615→  1615→              </div>
+  1616→  1616→              <div className="space-y-2">
+  1617→  1617→                <Label className="text-xs text-gray-600">Telefone</Label>
+  1618→  1618→                <Input
+  1619→  1619→                  placeholder="(00) 00000-0000"
+  1620→  1620→                  value={perfilTelefone}
+  1621→  1621→                  onChange={(e) => setPerfilTelefone(e.target.value)}
+  1622→  1622→                  className="h-10"
+  1623→  1623→                />
+  1624→  1624→              </div>
+  1625→  1625→              <Button
+  1626→  1626→                className="w-full bg-red-600 hover:bg-red-700 text-white h-10 text-sm"
+  1627→  1627→                onClick={handleSavePerfil}
+  1628→  1628→                disabled={savingPerfil}
+  1629→  1629→              >
+  1630→  1630→                {savingPerfil ? (
+  1631→  1631→                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</>
+  1632→  1632→                ) : (
+  1633→  1633→                  <><Save className="h-4 w-4 mr-2" /> Salvar</>
+  1634→  1634→                )}
+  1635→  1635→              </Button>
+  1636→  1636→            </CardContent>
+  1637→  1637→          </Card>
+  1638→  1638→        </TabsContent>
+  1639→  1639→      </Tabs>
+  1640→  1640→
+  1641→  1641→      {/* ── Modal de Revisão Pós-Upload ── */}
+  1642→  1642→      <AnimatePresence>
+  1643→  1643→        {reviewOpen && (
+  1644→  1644→          <motion.div
+  1645→  1645→            initial={{ opacity: 0 }}
+  1646→  1646→            animate={{ opacity: 1 }}
+  1647→  1647→            exit={{ opacity: 0 }}
+  1648→  1648→            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4"
+  1649→  1649→            onClick={() => { if (!reviewPublishing) setReviewOpen(false) }}
+  1650→  1650→          >
+  1651→  1651→            <motion.div
+  1652→  1652→              initial={{ scale: 0.95, y: 20 }}
+  1653→  1653→              animate={{ scale: 1, y: 0 }}
+  1654→  1654→              exit={{ scale: 0.95, y: 20 }}
+  1655→  1655→              className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col"
+  1656→  1656→              onClick={(e) => e.stopPropagation()}
+  1657→  1657→            >
+  1658→  1658→              {/* Header */}
+  1659→  1659→              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+  1660→  1660→                <div className="flex items-center gap-2">
+  1661→  1661→                  <Eye className="h-5 w-5 text-orange-500" />
+  1662→  1662→                  <h3 className="text-base font-bold text-gray-800">Revisar Produtos</h3>
+  1663→  1663→                </div>
+  1664→  1664→                <button onClick={() => !reviewPublishing && setReviewOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
+  1665→  1665→                  <X className="h-5 w-5" />
+  1666→  1666→                </button>
+  1667→  1667→              </div>
+  1668→  1668→
+  1669→  1669→              {/* Info */}
+  1670→  1670→              <div className="px-5 py-3 bg-orange-50 border-b border-orange-100">
+  1671→  1671→                <p className="text-xs text-orange-800">
+  1672→  1672→                  Revise os produtos extraídos do PDF. Remova itens incorretos e clique em <strong>Publicar</strong> quando estiver pronto.
+  1673→  1673→                </p>
+  1674→  1674→                <p className="text-xs text-orange-600 mt-1 font-medium">
+  1675→  1675→                  {reviewProdutos.length} produto{reviewProdutos.length !== 1 ? 's' : ''} encontrado{reviewProdutos.length !== 1 ? 's' : ''}
+  1676→  1676→                </p>
+  1677→  1677→              </div>
+  1678→  1678→
+  1679→  1679→              {/* Lista de produtos */}
+  1680→  1680→              <div className="flex-1 overflow-y-auto px-5 py-3">
+  1681→  1681→                {reviewProdutos.length === 0 ? (
+  1682→  1682→                  <div className="text-center py-10">
+  1683→  1683→                    <Package className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+  1684→  1684→                    <p className="text-sm text-gray-400">Todos os produtos foram removidos.</p>
+  1685→  1685→                    <p className="text-xs text-gray-400 mt-1">Feche esta janela e tente novamente.</p>
+  1686→  1686→                  </div>
+  1687→  1687→                ) : (
+  1688→  1688→                  <div className="space-y-1.5">
+  1689→  1689→                    {reviewProdutos.map((p, idx) => (
+  1690→  1690→                      <motion.div
+  1691→  1691→                        key={idx}
+  1692→  1692→                        initial={{ opacity: 0, x: -8 }}
+  1693→  1693→                        animate={{ opacity: 1, x: 0 }}
+  1694→  1694→                        transition={{ delay: idx * 0.02 }}
+  1695→  1695→                        className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-100 hover:border-red-200 transition-colors group"
+  1696→  1696→                      >
+  1697→  1697→                        <div className="min-w-0 flex-1">
+  1698→  1698→                          <p className="text-sm font-medium truncate text-gray-800">
+  1699→  1699→                            {p.nome}
+  1700→  1700→                          </p>
+  1701→  1701→                          <div className="flex items-center gap-2 mt-0.5">
+  1702→  1702→                            {p.marca && <span className="text-[10px] text-gray-400">{p.marca}</span>}
+  1703→  1703→                            {p.unidade && <span className="text-[10px] text-blue-500">{p.unidade}</span>}
+  1704→  1704→                          </div>
+  1705→  1705→                        </div>
+  1706→  1706→                        <div className="flex items-center gap-2 shrink-0 ml-2">
+  1707→  1707→                          <span className="text-sm font-bold text-red-600">{p.preco}</span>
+  1708→  1708→                          <button
+  1709→  1709→                            onClick={() => removeReviewProduto(idx)}
+  1710→  1710→                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all p-1"
+  1711→  1711→                            title="Remover item"
+  1712→  1712→                          >
+  1713→  1713→                            <X className="h-4 w-4" />
+  1714→  1714→                          </button>
+  1715→  1715→                        </div>
+  1716→  1716→                      </motion.div>
+  1717→  1717→                    ))}
+  1718→  1718→                  </div>
+  1719→  1719→                )}
+  1720→  1720→              </div>
+  1721→  1721→
+  1722→  1722→              {/* Actions */}
+  1723→  1723→              <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+  1724→  1724→                <Button
+  1725→  1725→                  variant="outline"
+  1726→  1726→                  className="flex-1 h-10 text-sm"
+  1727→  1727→                  onClick={() => setReviewOpen(false)}
+  1728→  1728→                  disabled={reviewPublishing}
+  1729→  1729→                >
+  1730→  1730→                  Cancelar
+  1731→  1731→                </Button>
+  1732→  1732→                <Button
+  1733→  1733→                  className="flex-1 bg-red-600 hover:bg-red-700 text-white h-10 text-sm font-semibold"
+  1734→  1734→                  onClick={handlePublish}
+  1735→  1735→                  disabled={reviewPublishing || reviewProdutos.length === 0}
+  1736→  1736→                >
+  1737→  1737→                  {reviewPublishing ? (
+  1738→  1738→                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Publicando...</>
+  1739→  1739→                  ) : (
+  1740→  1740→                    <><CheckCircle className="h-4 w-4 mr-2" /> Publicar {reviewProdutos.length} produto{reviewProdutos.length !== 1 ? 's' : ''}</>
+  1741→  1741→                  )}
+  1742→  1742→                </Button>
+  1743→  1743→              </div>
+  1744→  1744→            </motion.div>
+  1745→  1745→          </motion.div>
+  1746→  1746→        )}
+  1747→  1747→      </AnimatePresence>
+  1748→  1748→    </div>
+  1749→  1749→  )
+  1750→  1750→}
+  1751→  1751→
+  1752→  1752→// ── MarketPanel ─────────────────────────────────────────────────────────────
+  1753→  1753→
+  1754→  1754→interface MarketPanelProps {
+  1755→  1755→  onLogout: () => void
+  1756→  1756→  onLogin: () => void
+  1757→  1757→}
+  1758→  1758→
+  1759→  1759→export default function MarketPanel({ onLogout, onLogin }: MarketPanelProps) {
+  1760→  1760→  const session = useSession()
+  1761→  1761→  const [conta, setConta] = useState<ContaData | null>(null)
+  1762→  1762→  const [dataFetched, setDataFetched] = useState(false)
+  1763→  1763→  const loading = session?.tipo === 'mercado' ? !dataFetched : false
+  1764→  1764→
+  1765→  1765→  useEffect(() => {
+  1766→  1766→    if (session?.tipo !== 'mercado') return
+  1767→  1767→    let cancelled = false
+  1768→  1768→    api<ContaData>('/api/mercado/conta')
+  1769→  1769→      .then((d) => {
+  1770→  1770→        if (!cancelled) setConta(d)
+  1771→  1771→      })
+  1772→  1772→      .catch(() => {})
+  1773→  1773→      .finally(() => {
+  1774→  1774→        if (!cancelled) setDataFetched(true)
+  1775→  1775→      })
+  1776→  1776→    return () => {
+  1777→  1777→      cancelled = true
+  1778→  1778→    }
+  1779→  1779→  }, [session])
+  1780→  1780→
+  1781→  1781→  if (loading) {
+  1782→  1782→    return (
+  1783→  1783→      <div className="space-y-4">
+  1784→  1784→        <Skeleton className="h-8 w-48" />
+  1785→  1785→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  1786→  1786→          {Array.from({ length: 4 }).map((_, i) => (
+  1787→  1787→            <Skeleton key={i} className="h-24 rounded-xl" />
+  1788→  1788→          ))}
+  1789→  1789→        </div>
+  1790→  1790→        <Skeleton className="h-48 rounded-xl" />
+  1791→  1791→      </div>
+  1792→  1792→    )
+  1793→  1793→  }
+  1794→  1794→
+  1795→  1795→  if (session?.tipo !== 'mercado' || !conta) {
+  1796→  1796→    return <LoginForm onLogin={onLogin} />
+  1797→  1797→  }
+  1798→  1798→
+  1799→  1799→  return <Dashboard conta={conta} onLogout={onLogout} />
+  1800→  1800→}

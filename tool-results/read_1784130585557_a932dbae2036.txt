@@ -1,0 +1,836 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useEffect, useCallback } from 'react'
+     4→     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→     5→import {
+     6→     6→  ShieldCheck,
+     7→     7→  LogIn,
+     8→     8→  Loader2,
+     9→     9→  RefreshCw,
+    10→    10→  Star,
+    11→    11→  Store,
+    12→    12→  FileText,
+    13→    13→  Package,
+    14→    14→  MousePointerClick,
+    15→    15→  Trash2,
+    16→    16→  Plus,
+    17→    17→  DollarSign,
+    18→    18→  UserCheck,
+    19→    19→  UserX,
+    20→    20→  Clock,
+    21→    21→} from 'lucide-react'
+    22→    22→import { Button } from '@/components/ui/button'
+    23→    23→import { Input } from '@/components/ui/input'
+    24→    24→import { Label } from '@/components/ui/label'
+    25→    25→import { Badge } from '@/components/ui/badge'
+    26→    26→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    27→    27→import { Separator } from '@/components/ui/separator'
+    28→    28→import { Skeleton } from '@/components/ui/skeleton'
+    29→    29→import {
+    30→    30→  Select,
+    31→    31→  SelectContent,
+    32→    32→  SelectItem,
+    33→    33→  SelectTrigger,
+    34→    34→  SelectValue,
+    35→    35→} from '@/components/ui/select'
+    36→    36→import {
+    37→    37→  Dialog,
+    38→    38→  DialogContent,
+    39→    39→  DialogHeader,
+    40→    40→  DialogTitle,
+    41→    41→  DialogTrigger,
+    42→    42→} from '@/components/ui/dialog'
+    43→    43→import {
+    44→    44→  AlertDialog,
+    45→    45→  AlertDialogAction,
+    46→    46→  AlertDialogCancel,
+    47→    47→  AlertDialogContent,
+    48→    48→  AlertDialogDescription,
+    49→    49→  AlertDialogFooter,
+    50→    50→  AlertDialogHeader,
+    51→    51→  AlertDialogTitle,
+    52→    52→  AlertDialogTrigger,
+    53→    53→} from '@/components/ui/alert-dialog'
+    54→    54→import { cn } from '@/lib/utils'
+    55→    55→import { api, useSession } from './AppShell'
+    56→    56→import { toast } from 'sonner'
+    57→    57→
+    58→    58→// ── Types ───────────────────────────────────────────────────────────────────
+    59→    59→
+    60→    60→interface AdminMercado {
+    61→    61→  id: string
+    62→    62→  nome: string
+    63→    63→  cidade: string
+    64→    64→  estado: string
+    65→    65→  endereco?: string | null
+    66→    66→  telefone?: string | null
+    67→    67→  emailLogin: string
+    68→    68→  status: string
+    69→    69→  destaque: boolean
+    70→    70→  mensalidade: number
+    71→    71→  criadoEm: string
+    72→    72→  _count: {
+    73→    73→    produtos: number
+    74→    74→    encartes: number
+    75→    75→    cliques: number
+    76→    76→  }
+    77→    77→}
+    78→    78→
+    79→    79→// ── Helpers ─────────────────────────────────────────────────────────────────
+    80→    80→
+    81→    81→function statusBadge(status: string) {
+    82→    82→  const map: Record<string, { label: string; cls: string }> = {
+    83→    83→    piloto: {
+    84→    84→      label: 'Piloto',
+    85→    85→      cls: 'bg-blue-100 text-blue-700 border-blue-200',
+    86→    86→    },
+    87→    87→    ativo: {
+    88→    88→      label: 'Ativo',
+    89→    89→      cls: 'bg-red-50 text-red-700 border-red-200',
+    90→    90→    },
+    91→    91→    inativo: {
+    92→    92→      label: 'Inativo',
+    93→    93→      cls: 'bg-gray-100 text-gray-500 border-gray-200',
+    94→    94→    },
+    95→    95→    suspenso: {
+    96→    96→      label: 'Suspenso',
+    97→    97→      cls: 'bg-red-100 text-red-700 border-red-200',
+    98→    98→    },
+    99→    99→  }
+   100→   100→  const s = map[status] || { label: status, cls: 'bg-gray-100 text-gray-500' }
+   101→   101→  return <Badge className={cn('text-[10px]', s.cls)}>{s.label}</Badge>
+   102→   102→}
+   103→   103→
+   104→   104→function statusLabel(status: string): string {
+   105→   105→  const map: Record<string, string> = {
+   106→   106→    piloto: 'Piloto',
+   107→   107→    ativo: 'Ativar',
+   108→   108→    inativo: 'Desativar',
+   109→   109→    suspenso: 'Suspender',
+   110→   110→  }
+   111→   111→  return map[status] || status
+   112→   112→}
+   113→   113→
+   114→   114→function nextStatusAction(current: string): string {
+   115→   115→  if (current === 'piloto') return 'ativo'
+   116→   116→  if (current === 'ativo') return 'inativo'
+   117→   117→  return 'piloto'
+   118→   118→}
+   119→   119→
+   120→   120→function nextStatusLabel(current: string): string {
+   121→   121→  if (current === 'piloto') return 'Ativar'
+   122→   122→  if (current === 'ativo') return 'Desativar'
+   123→   123→  return 'Piloto'
+   124→   124→}
+   125→   125→
+   126→   126→function formatBRL(val: number): string {
+   127→   127→  return val.toLocaleString('pt-BR', {
+   128→   128→    style: 'currency',
+   129→   129→    currency: 'BRL',
+   130→   130→  })
+   131→   131→}
+   132→   132→
+   133→   133→// ── Login Form ──────────────────────────────────────────────────────────────
+   134→   134→
+   135→   135→function AdminLoginForm({ onLogin }: { onLogin: () => void }) {
+   136→   136→  const [email, setEmail] = useState('')
+   137→   137→  const [senha, setSenha] = useState('')
+   138→   138→  const [loading, setLoading] = useState(false)
+   139→   139→
+   140→   140→  const handleSubmit = async (e: React.FormEvent) => {
+   141→   141→    e.preventDefault()
+   142→   142→    if (!email || !senha) {
+   143→   143→      toast.error('Preencha todos os campos')
+   144→   144→      return
+   145→   145→    }
+   146→   146→    setLoading(true)
+   147→   147→    try {
+   148→   148→      await api('/api/auth/login', {
+   149→   149→        method: 'POST',
+   150→   150→        body: JSON.stringify({ email, senha }),
+   151→   151→      })
+   152→   152→      toast.success('Login administrativo realizado!')
+   153→   153→      onLogin()
+   154→   154→    } catch (err) {
+   155→   155→      toast.error(err instanceof Error ? err.message : 'Erro ao fazer login')
+   156→   156→    } finally {
+   157→   157→      setLoading(false)
+   158→   158→    }
+   159→   159→  }
+   160→   160→
+   161→   161→  return (
+   162→   162→    <motion.div
+   163→   163→      initial={{ opacity: 0, y: 20 }}
+   164→   164→      animate={{ opacity: 1, y: 0 }}
+   165→   165→      className="flex items-center justify-center min-h-[60vh]"
+   166→   166→    >
+   167→   167→      <Card className="w-full max-w-sm border-gray-100">
+   168→   168→        <CardHeader className="text-center pb-2">
+   169→   169→          <div className="h-16 w-16 rounded-full bg-red-600 flex items-center justify-center text-white font-extrabold text-xl mx-auto mb-3">
+   170→   170→            EB
+   171→   171→          </div>
+   172→   172→          <CardTitle className="text-lg">Painel Administrativo</CardTitle>
+   173→   173→          <p className="text-xs text-gray-500 mt-1">
+   174→   174→            Acesso restrito a administradores
+   175→   175→          </p>
+   176→   176→        </CardHeader>
+   177→   177→        <CardContent>
+   178→   178→          <form onSubmit={handleSubmit} className="space-y-4">
+   179→   179→            <div className="space-y-2">
+   180→   180→              <Label htmlFor="a-email" className="text-sm">
+   181→   181→                E-mail
+   182→   182→              </Label>
+   183→   183→              <Input
+   184→   184→                id="a-email"
+   185→   185→                type="email"
+   186→   186→                placeholder="admin@encartebrasil.com"
+   187→   187→                value={email}
+   188→   188→                onChange={(e) => setEmail(e.target.value)}
+   189→   189→                autoComplete="email"
+   190→   190→              />
+   191→   191→            </div>
+   192→   192→            <div className="space-y-2">
+   193→   193→              <Label htmlFor="a-senha" className="text-sm">
+   194→   194→                Senha
+   195→   195→              </Label>
+   196→   196→              <Input
+   197→   197→                id="a-senha"
+   198→   198→                type="password"
+   199→   199→                placeholder="••••••••"
+   200→   200→                value={senha}
+   201→   201→                onChange={(e) => setSenha(e.target.value)}
+   202→   202→                autoComplete="current-password"
+   203→   203→              />
+   204→   204→            </div>
+   205→   205→            <Button
+   206→   206→              type="submit"
+   207→   207→              className="w-full bg-red-600 hover:bg-red-700 text-white"
+   208→   208→              disabled={loading}
+   209→   209→            >
+   210→   210→              {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+   211→   211→              <ShieldCheck className="h-4 w-4 mr-2" />
+   212→   212→              Entrar como Admin
+   213→   213→            </Button>
+   214→   214→          </form>
+   215→   215→        </CardContent>
+   216→   216→      </Card>
+   217→   217→    </motion.div>
+   218→   218→  )
+   219→   219→}
+   220→   220→
+   221→   221→// ── New Market Form ─────────────────────────────────────────────────────────
+   222→   222→
+   223→   223→function NewMarketForm({ onCreated }: { onCreated: () => void }) {
+   224→   224→  const [open, setOpen] = useState(false)
+   225→   225→  const [loading, setLoading] = useState(false)
+   226→   226→  const [form, setForm] = useState({
+   227→   227→    nome: '',
+   228→   228→    cnpj: '',
+   229→   229→    email: '',
+   230→   230→    senha: '',
+   231→   231→    cidade: '',
+   232→   232→    estado: '',
+   233→   233→    endereco: '',
+   234→   234→    telefone: '',
+   235→   235→    mensalidade: '599',
+   236→   236→  })
+   237→   237→
+   238→   238→  const handleChange = (field: string, value: string) => {
+   239→   239→    setForm((prev) => ({ ...prev, [field]: value }))
+   240→   240→  }
+   241→   241→
+   242→   242→  const handleSubmit = async (e: React.FormEvent) => {
+   243→   243→    e.preventDefault()
+   244→   244→    const { nome, cnpj, email, senha, cidade, estado } = form
+   245→   245→    const cnpjLimpo = (cnpj || '').replace(/\D/g, '')
+   246→   246→    if (!nome || !cnpj || !email || !senha || !cidade || !estado) {
+   247→   247→      toast.error('Preencha os campos obrigatórios')
+   248→   248→      return
+   249→   249→    }
+   250→   250→    if (cnpjLimpo.length !== 14) {
+   251→   251→      toast.error('CNPJ inválido. Digite 14 dígitos.')
+   252→   252→      return
+   253→   253→    }
+   254→   254→    setLoading(true)
+   255→   255→    try {
+   256→   256→      await api('/api/admin/mercado', {
+   257→   257→        method: 'POST',
+   258→   258→        body: JSON.stringify({
+   259→   259→          ...form,
+   260→   260→          mensalidade: parseInt(form.mensalidade) || 599,
+   261→   261→        }),
+   262→   262→      })
+   263→   263→      toast.success(`Mercado "${nome}" cadastrado com sucesso!`)
+   264→   264→      setOpen(false)
+   265→   265→      setForm({
+   266→   266→        nome: '',
+   267→   267→        cnpj: '',
+   268→   268→        email: '',
+   269→   269→        senha: '',
+   270→   270→        cidade: '',
+   271→   271→        estado: '',
+   272→   272→        endereco: '',
+   273→   273→        telefone: '',
+   274→   274→        mensalidade: '599',
+   275→   275→      })
+   276→   276→      onCreated()
+   277→   277→    } catch (err) {
+   278→   278→      toast.error(err instanceof Error ? err.message : 'Erro ao cadastrar')
+   279→   279→    } finally {
+   280→   280→      setLoading(false)
+   281→   281→    }
+   282→   282→  }
+   283→   283→
+   284→   284→  return (
+   285→   285→    <Dialog open={open} onOpenChange={setOpen}>
+   286→   286→      <DialogTrigger asChild>
+   287→   287→        <Button className="bg-red-600 hover:bg-red-700 text-white text-sm h-9">
+   288→   288→          <Plus className="h-4 w-4 mr-1.5" />
+   289→   289→          Cadastrar Novo Mercado
+   290→   290→        </Button>
+   291→   291→      </DialogTrigger>
+   292→   292→      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+   293→   293→        <DialogHeader>
+   294→   294→          <DialogTitle>Cadastrar Novo Mercado</DialogTitle>
+   295→   295→        </DialogHeader>
+   296→   296→        <form onSubmit={handleSubmit} className="space-y-3 mt-2">
+   297→   297→          <div className="space-y-1.5">
+   298→   298→            <Label className="text-xs">Nome *</Label>
+   299→   299→            <Input
+   300→   300→              value={form.nome}
+   301→   301→              onChange={(e) => handleChange('nome', e.target.value)}
+   302→   302→              placeholder="Supermercado Exemplo"
+   303→   303→            />
+   304→   304→          </div>
+   305→   305→          <div className="space-y-1.5">
+   306→   306→            <Label className="text-xs">CNPJ *</Label>
+   307→   307→            <Input
+   308→   308→              value={form.cnpj}
+   309→   309→              onChange={(e) => handleChange('cnpj', e.target.value)}
+   310→   310→              placeholder="00.000.000/0000-00"
+   311→   311→              inputMode="numeric"
+   312→   312→            />
+   313→   313→          </div>
+   314→   314→          <div className="grid grid-cols-2 gap-3">
+   315→   315→            <div className="space-y-1.5">
+   316→   316→              <Label className="text-xs">E-mail *</Label>
+   317→   317→              <Input
+   318→   318→                type="email"
+   319→   319→                value={form.email}
+   320→   320→                onChange={(e) => handleChange('email', e.target.value)}
+   321→   321→                placeholder="contato@mercado.com"
+   322→   322→              />
+   323→   323→            </div>
+   324→   324→            <div className="space-y-1.5">
+   325→   325→              <Label className="text-xs">Senha *</Label>
+   326→   326→              <Input
+   327→   327→                type="password"
+   328→   328→                value={form.senha}
+   329→   329→                onChange={(e) => handleChange('senha', e.target.value)}
+   330→   330→                placeholder="••••••••"
+   331→   331→              />
+   332→   332→            </div>
+   333→   333→          </div>
+   334→   334→          <div className="grid grid-cols-2 gap-3">
+   335→   335→            <div className="space-y-1.5">
+   336→   336→              <Label className="text-xs">Cidade *</Label>
+   337→   337→              <Input
+   338→   338→                value={form.cidade}
+   339→   339→                onChange={(e) => handleChange('cidade', e.target.value)}
+   340→   340→                placeholder="São Paulo"
+   341→   341→              />
+   342→   342→            </div>
+   343→   343→            <div className="space-y-1.5">
+   344→   344→              <Label className="text-xs">Estado *</Label>
+   345→   345→              <Select
+   346→   346→                value={form.estado}
+   347→   347→                onValueChange={(v) => handleChange('estado', v)}
+   348→   348→              >
+   349→   349→                <SelectTrigger>
+   350→   350→                  <SelectValue placeholder="UF" />
+   351→   351→                </SelectTrigger>
+   352→   352→                <SelectContent>
+   353→   353→                  {[
+   354→   354→                    'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO',
+   355→   355→                    'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI',
+   356→   356→                    'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+   357→   357→                  ].map((uf) => (
+   358→   358→                    <SelectItem key={uf} value={uf}>
+   359→   359→                      {uf}
+   360→   360→                    </SelectItem>
+   361→   361→                  ))}
+   362→   362→                </SelectContent>
+   363→   363→              </Select>
+   364→   364→            </div>
+   365→   365→          </div>
+   366→   366→          <div className="space-y-1.5">
+   367→   367→            <Label className="text-xs">Endereço</Label>
+   368→   368→            <Input
+   369→   369→              value={form.endereco}
+   370→   370→              onChange={(e) => handleChange('endereco', e.target.value)}
+   371→   371→              placeholder="Rua Exemplo, 123"
+   372→   372→            />
+   373→   373→          </div>
+   374→   374→          <div className="grid grid-cols-2 gap-3">
+   375→   375→            <div className="space-y-1.5">
+   376→   376→              <Label className="text-xs">Telefone</Label>
+   377→   377→              <Input
+   378→   378→                value={form.telefone}
+   379→   379→                onChange={(e) => handleChange('telefone', e.target.value)}
+   380→   380→                placeholder="(11) 99999-9999"
+   381→   381→              />
+   382→   382→            </div>
+   383→   383→            <div className="space-y-1.5">
+   384→   384→              <Label className="text-xs">Mensalidade (R$)</Label>
+   385→   385→              <Input
+   386→   386→                type="number"
+   387→   387→                value={form.mensalidade}
+   388→   388→                onChange={(e) => handleChange('mensalidade', e.target.value)}
+   389→   389→              />
+   390→   390→            </div>
+   391→   391→          </div>
+   392→   392→          <Button
+   393→   393→            type="submit"
+   394→   394→            className="w-full bg-red-600 hover:bg-red-700 text-white"
+   395→   395→            disabled={loading}
+   396→   396→          >
+   397→   397→            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+   398→   398→            Cadastrar Mercado
+   399→   399→          </Button>
+   400→   400→        </form>
+   401→   401→      </DialogContent>
+   402→   402→    </Dialog>
+   403→   403→  )
+   404→   404→}
+   405→   405→
+   406→   406→// ── Market Row ──────────────────────────────────────────────────────────────
+   407→   407→
+   408→   408→function MarketRow({
+   409→   409→  m,
+   410→   410→  onRefresh,
+   411→   411→}: {
+   412→   412→  m: AdminMercado
+   413→   413→  onRefresh: () => void
+   414→   414→}) {
+   415→   415→  const [actionLoading, setActionLoading] = useState<string | null>(null)
+   416→   416→
+   417→   417→  const changeStatus = async (newStatus: string) => {
+   418→   418→    setActionLoading(`status-${m.id}`)
+   419→   419→    try {
+   420→   420→      await api(`/api/admin/status/${m.id}`, {
+   421→   421→        method: 'POST',
+   422→   422→        body: JSON.stringify({ status: newStatus }),
+   423→   423→      })
+   424→   424→      toast.success(`Status alterado para "${statusLabel(newStatus).replace(/ar$/, '')}"`)
+   425→   425→      onRefresh()
+   426→   426→    } catch (err) {
+   427→   427→      toast.error(err instanceof Error ? err.message : 'Erro ao alterar status')
+   428→   428→    } finally {
+   429→   429→      setActionLoading(null)
+   430→   430→    }
+   431→   431→  }
+   432→   432→
+   433→   433→  const toggleDestaque = async () => {
+   434→   434→    setActionLoading(`destaque-${m.id}`)
+   435→   435→    try {
+   436→   436→      await api(`/api/admin/destaque/${m.id}`, { method: 'POST' })
+   437→   437→      toast.success(
+   438→   438→        m.destaque ? 'Destaque removido' : 'Mercado destacado!',
+   439→   439→      )
+   440→   440→      onRefresh()
+   441→   441→    } catch (err) {
+   442→   442→      toast.error(err instanceof Error ? err.message : 'Erro ao alterar destaque')
+   443→   443→    } finally {
+   444→   444→      setActionLoading(null)
+   445→   445→    }
+   446→   446→  }
+   447→   447→
+   448→   448→  const deleteMercado = async () => {
+   449→   449→    setActionLoading(`delete-${m.id}`)
+   450→   450→    try {
+   451→   451→      await api(`/api/admin/mercado/${m.id}`, { method: 'DELETE' })
+   452→   452→      toast.success(`"${m.nome}" excluído`)
+   453→   453→      onRefresh()
+   454→   454→    } catch (err) {
+   455→   455→      toast.error(err instanceof Error ? err.message : 'Erro ao excluir')
+   456→   456→    } finally {
+   457→   457→      setActionLoading(null)
+   458→   458→    }
+   459→   459→  }
+   460→   460→
+   461→   461→  const nextStatus = nextStatusAction(m.status)
+   462→   462→  const nextLabel = nextStatusLabel(m.status)
+   463→   463→
+   464→   464→  return (
+   465→   465→    <motion.div
+   466→   466→      layout
+   467→   467→      initial={{ opacity: 0, y: 4 }}
+   468→   468→      animate={{ opacity: 1, y: 0 }}
+   469→   469→      exit={{ opacity: 0, y: -4 }}
+   470→   470→    >
+   471→   471→      <Card className="border-gray-100 overflow-hidden">
+   472→   472→        <CardContent className="p-0">
+   473→   473→          {/* Main info */}
+   474→   474→          <div className="p-3 sm:p-4">
+   475→   475→            <div className="flex items-start justify-between gap-2">
+   476→   476→              <div className="flex items-center gap-3 min-w-0">
+   477→   477→                <div className="h-10 w-10 rounded-full bg-red-600 flex items-center justify-center text-white font-bold text-xs shrink-0">
+   478→   478→                  {m.nome
+   479→   479→                    .split(/\s+/)
+   480→   480→                    .filter(Boolean)
+   481→   481→                    .slice(0, 2)
+   482→   482→                    .map((w) => w[0])
+   483→   483→                    .join('')
+   484→   484→                    .toUpperCase()}
+   485→   485→                </div>
+   486→   486→                <div className="min-w-0">
+   487→   487→                  <div className="flex items-center gap-2 flex-wrap">
+   488→   488→                    <p className="text-sm font-semibold truncate">{m.nome}</p>
+   489→   489→                    {statusBadge(m.status)}
+   490→   490→                    {m.destaque && (
+   491→   491→                      <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">
+   492→   492→                        <Star className="h-2.5 w-2.5 mr-0.5" />
+   493→   493→                        Destaque
+   494→   494→                      </Badge>
+   495→   495→                    )}
+   496→   496→                  </div>
+   497→   497→                  <p className="text-xs text-gray-500 mt-0.5">
+   498→   498→                    CNPJ: {m.cnpj ? m.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : '—'} · {m.cidade}/{m.estado}
+   499→   499→                  </p>
+   500→   500→                  <p className="text-[11px] text-gray-400">{m.emailLogin}</p>
+   501→   501→                </div>
+   502→   502→              </div>
+   503→   503→            </div>
+   504→   504→
+   505→   505→            {/* Counts */}
+   506→   506→            <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
+   507→   507→              <span className="flex items-center gap-1">
+   508→   508→                <FileText className="h-3 w-3" />
+   509→   509→                {m._count.encartes} encarte{m._count.encartes !== 1 ? 's' : ''}
+   510→   510→              </span>
+   511→   511→              <span className="flex items-center gap-1">
+   512→   512→                <Package className="h-3 w-3" />
+   513→   513→                {m._count.produtos} produto{m._count.produtos !== 1 ? 's' : ''}
+   514→   514→              </span>
+   515→   515→              <span className="flex items-center gap-1">
+   516→   516→                <MousePointerClick className="h-3 w-3" />
+   517→   517→                {m._count.cliques} cliques
+   518→   518→              </span>
+   519→   519→              <span className="flex items-center gap-1 ml-auto text-red-600 font-semibold">
+   520→   520→                <DollarSign className="h-3 w-3" />
+   521→   521→                R${m.mensalidade}
+   522→   522→              </span>
+   523→   523→            </div>
+   524→   524→          </div>
+   525→   525→
+   526→   526→          <Separator />
+   527→   527→
+   528→   528→          {/* Actions */}
+   529→   529→          <div className="px-3 py-2 bg-gray-50/50 flex flex-wrap gap-2">
+   530→   530→            {/* Status cycle: Piloto → Ativar → Desativar */}
+   531→   531→            <Button
+   532→   532→              variant="outline"
+   533→   533→              size="sm"
+   534→   534→              className={cn(
+   535→   535→                'text-xs h-7',
+   536→   536→                nextStatus === 'ativo' &&
+   537→   537→                  'border-red-200 text-red-600 hover:bg-orange-50',
+   538→   538→                nextStatus === 'inativo' &&
+   539→   539→                  'border-gray-300 text-gray-600 hover:bg-gray-100',
+   540→   540→                nextStatus === 'piloto' &&
+   541→   541→                  'border-blue-200 text-blue-600 hover:bg-blue-50',
+   542→   542→              )}
+   543→   543→              disabled={!!actionLoading}
+   544→   544→              onClick={() => changeStatus(nextStatus)}
+   545→   545→            >
+   546→   546→              {actionLoading === `status-${m.id}` ? (
+   547→   547→                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+   548→   548→              ) : nextStatus === 'piloto' ? (
+   549→   549→                <Clock className="h-3 w-3 mr-1" />
+   550→   550→              ) : nextStatus === 'ativo' ? (
+   551→   551→                <UserCheck className="h-3 w-3 mr-1" />
+   552→   552→              ) : (
+   553→   553→                <UserX className="h-3 w-3 mr-1" />
+   554→   554→              )}
+   555→   555→              {nextLabel}
+   556→   556→            </Button>
+   557→   557→
+   558→   558→            {/* Destaque toggle */}
+   559→   559→            <Button
+   560→   560→              variant="outline"
+   561→   561→              size="sm"
+   562→   562→              className={cn(
+   563→   563→                'text-xs h-7',
+   564→   564→                m.destaque
+   565→   565→                  ? 'border-amber-200 text-amber-600 hover:bg-amber-50'
+   566→   566→                  : 'border-gray-300 text-gray-600 hover:bg-gray-100',
+   567→   567→              )}
+   568→   568→              disabled={!!actionLoading}
+   569→   569→              onClick={toggleDestaque}
+   570→   570→            >
+   571→   571→              {actionLoading === `destaque-${m.id}` ? (
+   572→   572→                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+   573→   573→              ) : (
+   574→   574→                <Star className={cn('h-3 w-3 mr-1', m.destaque && 'fill-amber-400 text-amber-400')} />
+   575→   575→              )}
+   576→   576→              {m.destaque ? 'Remover' : 'Destacar'}
+   577→   577→            </Button>
+   578→   578→
+   579→   579→            {/* Delete */}
+   580→   580→            <AlertDialog>
+   581→   581→              <AlertDialogTrigger asChild>
+   582→   582→                <Button
+   583→   583→                  variant="outline"
+   584→   584→                  size="sm"
+   585→   585→                  className="text-xs h-7 border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600"
+   586→   586→                  disabled={!!actionLoading}
+   587→   587→                >
+   588→   588→                  <Trash2 className="h-3 w-3 mr-1" />
+   589→   589→                  Excluir
+   590→   590→                </Button>
+   591→   591→              </AlertDialogTrigger>
+   592→   592→              <AlertDialogContent>
+   593→   593→                <AlertDialogHeader>
+   594→   594→                  <AlertDialogTitle>Excluir &quot;{m.nome}&quot;?</AlertDialogTitle>
+   595→   595→                  <AlertDialogDescription>
+   596→   596→                    Esta ação é permanente e removerá todos os encartes,
+   597→   597→                    produtos e estatísticas associados.
+   598→   598→                  </AlertDialogDescription>
+   599→   599→                </AlertDialogHeader>
+   600→   600→                <AlertDialogFooter>
+   601→   601→                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+   602→   602→                  <AlertDialogAction
+   603→   603→                    onClick={deleteMercado}
+   604→   604→                    className="bg-red-500 hover:bg-red-600"
+   605→   605→                  >
+   606→   606→                    Excluir permanentemente
+   607→   607→                  </AlertDialogAction>
+   608→   608→                </AlertDialogFooter>
+   609→   609→              </AlertDialogContent>
+   610→   610→            </AlertDialog>
+   611→   611→          </div>
+   612→   612→        </CardContent>
+   613→   613→      </Card>
+   614→   614→    </motion.div>
+   615→   615→  )
+   616→   616→}
+   617→   617→
+   618→   618→// ── AdminPanel ──────────────────────────────────────────────────────────────
+   619→   619→
+   620→   620→interface AdminPanelProps {
+   621→   621→  onLogout: () => void
+   622→   622→  onLogin: () => void
+   623→   623→}
+   624→   624→
+   625→   625→export default function AdminPanel({ onLogout, onLogin }: AdminPanelProps) {
+   626→   626→  const session = useSession()
+   627→   627→  const [mercados, setMercados] = useState<AdminMercado[]>([])
+   628→   628→  const [dataFetched, setDataFetched] = useState(false)
+   629→   629→  const [refreshing, setRefreshing] = useState(false)
+   630→   630→  const loading = session?.tipo === 'admin' ? !dataFetched : false
+   631→   631→
+   632→   632→  const fetchMercados = useCallback(async () => {
+   633→   633→    try {
+   634→   634→      const data = await api<AdminMercado[]>('/api/admin/mercados')
+   635→   635→      setMercados(data)
+   636→   636→    } catch {
+   637→   637→      toast.error('Erro ao carregar mercados')
+   638→   638→    }
+   639→   639→  }, [])
+   640→   640→
+   641→   641→  useEffect(() => {
+   642→   642→    if (session?.tipo !== 'admin') return
+   643→   643→    let cancelled = false
+   644→   644→
+   645→   645→    const load = async () => {
+   646→   646→      try {
+   647→   647→        const data = await api<AdminMercado[]>('/api/admin/mercados')
+   648→   648→        if (!cancelled) setMercados(data)
+   649→   649→      } catch {
+   650→   650→        if (!cancelled) toast.error('Erro ao carregar mercados')
+   651→   651→      } finally {
+   652→   652→        if (!cancelled) setDataFetched(true)
+   653→   653→      }
+   654→   654→    }
+   655→   655→
+   656→   656→    load()
+   657→   657→    return () => {
+   658→   658→      cancelled = true
+   659→   659→    }
+   660→   660→  }, [session])
+   661→   661→
+   662→   662→  const handleRefresh = async () => {
+   663→   663→    setRefreshing(true)
+   664→   664→    await fetchMercados()
+   665→   665→    setRefreshing(false)
+   666→   666→    toast.success('Lista atualizada')
+   667→   667→  }
+   668→   668→
+   669→   669→  // ── Not logged in ─────────────────────────────────────────────────────
+   670→   670→  if (!loading && session?.tipo !== 'admin') {
+   671→   671→    return <AdminLoginForm onLogin={onLogin} />
+   672→   672→  }
+   673→   673→
+   674→   674→  // ── Loading ──────────────────────────────────────────────────────────
+   675→   675→  if (loading) {
+   676→   676→    return (
+   677→   677→      <div className="space-y-4">
+   678→   678→        <Skeleton className="h-8 w-48" />
+   679→   679→        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+   680→   680→          {Array.from({ length: 6 }).map((_, i) => (
+   681→   681→            <Skeleton key={i} className="h-20 rounded-xl" />
+   682→   682→          ))}
+   683→   683→        </div>
+   684→   684→        {Array.from({ length: 3 }).map((_, i) => (
+   685→   685→          <Skeleton key={i} className="h-32 rounded-xl" />
+   686→   686→        ))}
+   687→   687→      </div>
+   688→   688→    )
+   689→   689→  }
+   690→   690→
+   691→   691→  // ── Stats ────────────────────────────────────────────────────────────
+   692→   692→  const totalMercados = mercados.length
+   693→   693→  const pilotos = mercados.filter((m) => m.status === 'piloto').length
+   694→   694→  const ativos = mercados.filter((m) => m.status === 'ativo').length
+   695→   695→  const inativos = mercados.filter((m) => m.status === 'inativo').length
+   696→   696→  const destaques = mercados.filter((m) => m.destaque).length
+   697→   697→  const receitaMensal = mercados.reduce(
+   698→   698→    (acc, m) => acc + (m.status === 'ativo' || m.status === 'piloto' ? m.mensalidade : 0),
+   699→   699→    0,
+   700→   700→  )
+   701→   701→
+   702→   702→  const stats = [
+   703→   703→    {
+   704→   704→      label: 'Total',
+   705→   705→      value: totalMercados,
+   706→   706→      icon: <Store className="h-5 w-5" />,
+   707→   707→      color: 'text-gray-700 bg-gray-100',
+   708→   708→    },
+   709→   709→    {
+   710→   710→      label: 'Pilotos',
+   711→   711→      value: pilotos,
+   712→   712→      icon: <Clock className="h-5 w-5" />,
+   713→   713→      color: 'text-blue-600 bg-blue-50',
+   714→   714→    },
+   715→   715→    {
+   716→   716→      label: 'Ativos',
+   717→   717→      value: ativos,
+   718→   718→      icon: <UserCheck className="h-5 w-5" />,
+   719→   719→      color: 'text-red-600 bg-orange-50',
+   720→   720→    },
+   721→   721→    {
+   722→   722→      label: 'Inativos',
+   723→   723→      value: inativos,
+   724→   724→      icon: <UserX className="h-5 w-5" />,
+   725→   725→      color: 'text-gray-500 bg-gray-50',
+   726→   726→    },
+   727→   727→    {
+   728→   728→      label: 'Destaques',
+   729→   729→      value: destaques,
+   730→   730→      icon: <Star className="h-5 w-5" />,
+   731→   731→      color: 'text-amber-600 bg-amber-50',
+   732→   732→    },
+   733→   733→    {
+   734→   734→      label: 'Receita Mensal',
+   735→   735→      value: formatBRL(receitaMensal),
+   736→   736→      icon: <DollarSign className="h-5 w-5" />,
+   737→   737→      color: 'text-red-600 bg-orange-50',
+   738→   738→    },
+   739→   739→  ]
+   740→   740→
+   741→   741→  return (
+   742→   742→    <div className="space-y-5">
+   743→   743→      {/* Header */}
+   744→   744→      <div className="flex items-center justify-between flex-wrap gap-3">
+   745→   745→        <div>
+   746→   746→          <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+   747→   747→            <ShieldCheck className="h-5 w-5 text-red-600" />
+   748→   748→            Painel Administrativo
+   749→   749→          </h2>
+   750→   750→          <p className="text-sm text-gray-500">
+   751→   751→            {totalMercados} mercado{totalMercados !== 1 ? 's' : ''} cadastrado
+   752→   752→            {totalMercados !== 1 ? 's' : ''}
+   753→   753→          </p>
+   754→   754→        </div>
+   755→   755→        <div className="flex items-center gap-2">
+   756→   756→          <Button
+   757→   757→            variant="outline"
+   758→   758→            size="sm"
+   759→   759→            onClick={handleRefresh}
+   760→   760→            disabled={refreshing}
+   761→   761→            className="text-xs"
+   762→   762→          >
+   763→   763→            <RefreshCw
+   764→   764→              className={cn('h-3.5 w-3.5 mr-1', refreshing && 'animate-spin')}
+   765→   765→            />
+   766→   766→            Atualizar
+   767→   767→          </Button>
+   768→   768→          <Button
+   769→   769→            variant="outline"
+   770→   770→            size="sm"
+   771→   771→            onClick={onLogout}
+   772→   772→            className="text-red-500 hover:text-red-600 hover:bg-red-50 text-xs"
+   773→   773→          >
+   774→   774→            Sair
+   775→   775→          </Button>
+   776→   776→        </div>
+   777→   777→      </div>
+   778→   778→
+   779→   779→      {/* Stats row */}
+   780→   780→      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+   781→   781→        {stats.map((s, i) => (
+   782→   782→          <motion.div
+   783→   783→            key={s.label}
+   784→   784→            initial={{ opacity: 0, y: 8 }}
+   785→   785→            animate={{ opacity: 1, y: 0 }}
+   786→   786→            transition={{ delay: i * 0.05 }}
+   787→   787→          >
+   788→   788→            <Card className="border-gray-100">
+   789→   789→              <CardContent className="p-3">
+   790→   790→                <div
+   791→   791→                  className={cn('p-1.5 rounded-lg w-fit mb-2', s.color)}
+   792→   792→                >
+   793→   793→                  {s.icon}
+   794→   794→                </div>
+   795→   795→                <p className="text-xl font-bold text-gray-800">{s.value}</p>
+   796→   796→                <p className="text-[10px] text-gray-500 mt-0.5">{s.label}</p>
+   797→   797→              </CardContent>
+   798→   798→            </Card>
+   799→   799→          </motion.div>
+   800→   800→        ))}
+   801→   801→      </div>
+   802→   802→
+   803→   803→      {/* New market */}
+   804→   804→      <div className="flex items-center justify-between">
+   805→   805→        <h3 className="text-sm font-semibold text-gray-700">
+   806→   806→          Mercados Cadastrados
+   807→   807→        </h3>
+   808→   808→        <NewMarketForm onCreated={fetchMercados} />
+   809→   809→      </div>
+   810→   810→
+   811→   811→      {/* Markets list */}
+   812→   812→      <div className="space-y-3 max-h-[calc(100vh-400px)] overflow-y-auto pr-1">
+   813→   813→        <AnimatePresence>
+   814→   814→          {mercados.length === 0 ? (
+   815→   815→            <motion.div
+   816→   816→              initial={{ opacity: 0 }}
+   817→   817→              animate={{ opacity: 1 }}
+   818→   818→              className="text-center py-12 text-gray-400"
+   819→   819→            >
+   820→   820→              <Store className="h-10 w-10 mx-auto mb-3 opacity-50" />
+   821→   821→              <p className="text-sm">Nenhum mercado cadastrado</p>
+   822→   822→            </motion.div>
+   823→   823→          ) : (
+   824→   824→            mercados.map((m) => (
+   825→   825→              <MarketRow
+   826→   826→                key={m.id}
+   827→   827→                m={m}
+   828→   828→                onRefresh={fetchMercados}
+   829→   829→              />
+   830→   830→            ))
+   831→   831→          )}
+   832→   832→        </AnimatePresence>
+   833→   833→      </div>
+   834→   834→    </div>
+   835→   835→  )
+   836→   836→}
