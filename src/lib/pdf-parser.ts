@@ -12,8 +12,8 @@
  * são cirúrgicos — só eliminam o que é claramente marketing/legal.
  */
 
-import { PDFParse } from 'pdf-parse'
-import { readFile } from 'fs/promises'
+// Tipos e parser de texto — sem dependência de módulo externo no import principal
+// PDFParse e pdfjs-dist são importados dinamicamente dentro das funções
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -360,34 +360,76 @@ export function parseProdutosDoTexto(text: string): ProdutoExtraido[] {
 }
 
 /**
- * Extrai texto de um buffer de PDF e retorna os produtos
+ * Extrai texto de um buffer de PDF e retorna os produtos.
+ * Método 1: PDFParse (pdf-parse v2) — melhor reconstrução de linhas/colunas
+ * Método 2: pdfjs-dist direto — fallback mais robusto no Render
  */
 export async function extrairProdutosDoPDF(pdfBuffer: Buffer | Uint8Array): Promise<{
   produtos: ProdutoExtraido[]
   textoBruto: string
   totalPaginas: number
 }> {
-  const uint8 = pdfBuffer instanceof Buffer ? new Uint8Array(pdfBuffer) : pdfBuffer
   let textoBruto = ''
   let totalPaginas = 0
 
+  // Método 1: PDFParse (melhor para colunas lado a lado)
   try {
+    const { PDFParse } = await import('pdf-parse')
+    const uint8 = pdfBuffer instanceof Buffer ? new Uint8Array(pdfBuffer) : pdfBuffer
     const parser = new PDFParse(uint8)
     const result = await parser.getText()
     textoBruto = result.text || ''
     totalPaginas = result.pages?.length || 0
-    console.log(`[pdf-parser] texto extraído: ${textoBruto.length} chars, ${totalPaginas} páginas`)
-  } catch (e: any) {
-    console.error('[pdf-parser] erro ao extrair texto do PDF:', e?.message || e)
-    // Se getText falhou, tenta abordagem alternativa com o pdf original (v1)
+    console.log(`[pdf-parser] PDFParse: ${textoBruto.length} chars, ${totalPaginas} páginas`)
+  } catch (e1: any) {
+    console.error('[pdf-parser] PDFParse falhou:', e1?.message || e1)
+
+    // Método 2: pdfjs-dist direto (sem worker, mais robusto)
     try {
-      const pdfParse = require('pdf-parse')
-      const result = await (typeof pdfParse === 'function' ? pdfParse : pdfParse.default)(pdfBuffer)
-      textoBruto = result.text || ''
-      totalPaginas = result.numpages || 0
-      console.log(`[pdf-parser] fallback v1: ${textoBruto.length} chars, ${totalPaginas} páginas`)
+      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.js').then((m: any) => m.default || m)
+      const uint8 = pdfBuffer instanceof Buffer ? new Uint8Array(pdfBuffer) : pdfBuffer
+      const doc = await pdfjsLib.getDocument({
+        data: uint8,
+        useWorkerFetch: false,
+        isEvalSupported: false,
+        useSystemFonts: true,
+      }).promise
+      totalPaginas = doc.numPages
+      const allLines: string[] = []
+
+      for (let i = 1; i <= totalPaginas; i++) {
+        const page = await doc.getPage(i)
+        const content = await page.getTextContent()
+        const items = (content.items as any[])
+          .filter((it: any) => it.str && it.str.trim().length > 0)
+          .map((it: any) => ({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width || 0 }))
+
+        if (items.length === 0) continue
+        items.sort((a: any, b: any) => {
+          const yd = b.y - a.y
+          return Math.abs(yd) > 3 ? yd : a.x - b.x
+        })
+
+        let line = [items[0]]
+        let ly = items[0].y
+        for (let j = 1; j < items.length; j++) {
+          const yd = Math.abs(items[j].y - ly)
+          if (yd > 3) {
+            allLines.push(line.map((it: any) => it.str).join(' '))
+            line = [items[j]]
+            ly = items[j].y
+          } else {
+            line.push(items[j])
+          }
+        }
+        allLines.push(line.map((it: any) => it.str).join(' '))
+      }
+
+      textoBruto = allLines.join('\n')
+      await doc.destroy()
+      console.log(`[pdf-parser] pdfjs-dist fallback: ${textoBruto.length} chars, ${totalPaginas} páginas`)
     } catch (e2: any) {
-      console.error('[pdf-parser] fallback também falhou:', e2?.message || e2)
+      console.error('[pdf-parser] pdfjs-dist também falhou:', e2?.message || e2)
     }
   }
 
