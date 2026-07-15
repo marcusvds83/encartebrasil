@@ -24,6 +24,8 @@ import {
   X,
   Eye,
   Pencil,
+  CreditCard,
+  Calendar,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -70,6 +72,10 @@ interface ContaData {
   totalProdutos: number
   totalEncartes: number
   totalCliques: number
+  pilotoInicio?: string | null
+  pilotoFim?: string | null
+  endereco?: string | null
+  telefone?: string | null
 }
 
 interface BITopProduto {
@@ -756,6 +762,26 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
   const [suporteSending, setSuporteSending] = useState(false)
   const [suporteEnviado, setSuporteEnviado] = useState(false)
 
+  // Perfil state
+  const [perfilEndereco, setPerfilEndereco] = useState(conta.endereco || '')
+  const [perfilTelefone, setPerfilTelefone] = useState(conta.telefone || '')
+  const [savingPerfil, setSavingPerfil] = useState(false)
+
+  const handleSavePerfil = async () => {
+    setSavingPerfil(true)
+    try {
+      await api('/api/mercado/perfil', {
+        method: 'PUT',
+        body: JSON.stringify({ endereco: perfilEndereco, telefone: perfilTelefone }),
+      })
+      toast.success('Perfil atualizado com sucesso!')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao salvar perfil')
+    } finally {
+      setSavingPerfil(false)
+    }
+  }
+
   const handleSuporte = async (e: React.FormEvent) => {
     e.preventDefault()
     setSuporteSending(true)
@@ -937,8 +963,35 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
     }
   }
 
+  // Pilot countdown helper
+  const pilotoDaysLeft = conta.pilotoFim
+    ? Math.max(0, Math.ceil((new Date(conta.pilotoFim).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null
+
+  const isPilotoActive = conta.status === 'piloto' && pilotoDaysLeft !== null && pilotoDaysLeft > 0
+  const isPilotoExpirado = conta.statusEfetivo === 'piloto_expirado'
+  const isAtivo = conta.status === 'ativo'
+
   return (
     <div className="space-y-6">
+      <Tabs defaultValue="painel">
+        <TabsList className="w-full grid grid-cols-3">
+          <TabsTrigger value="painel" className="text-xs gap-1.5">
+            <BarChart3 className="h-3.5 w-3.5" />
+            Painel
+          </TabsTrigger>
+          <TabsTrigger value="conta" className="text-xs gap-1.5">
+            <CreditCard className="h-3.5 w-3.5" />
+            Conta
+          </TabsTrigger>
+          <TabsTrigger value="perfil" className="text-xs gap-1.5">
+            <UserCircle className="h-3.5 w-3.5" />
+            Perfil
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── Tab: Painel ── */}
+        <TabsContent value="painel" className="space-y-6 mt-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -1392,6 +1445,187 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
           )}
         </AnimatePresence>
       </Card>
+        </TabsContent>
+
+        {/* ── Tab: Conta ── */}
+        <TabsContent value="conta" className="space-y-4 mt-4">
+          {/* Market info */}
+          <Card className="border-gray-100">
+            <CardHeader className="pb-3 pt-4 px-4">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-red-600" />
+                Informações da Conta
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-2.5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{conta.nome}</p>
+                  <p className="text-xs text-gray-400">CNPJ: XX.XXX.XXX/XXXX-XX</p>
+                </div>
+                {statusBadge(conta.statusEfetivo)}
+              </div>
+              <Separator />
+              <div className="grid gap-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                  <span className="text-gray-600">{conta.cidade}/{conta.estado}</span>
+                </div>
+                {conta.endereco && (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                    <span className="text-gray-600">{conta.endereco}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 w-3.5 shrink-0">✉</span>
+                  <span className="text-gray-600">{conta.emailLogin}</span>
+                </div>
+                {conta.telefone && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400 w-3.5 shrink-0">☎</span>
+                    <span className="text-gray-600">{conta.telefone}</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Pilot period */}
+          {isPilotoActive && (
+            <Card className="border-blue-200 bg-blue-50/50">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Calendar className="h-4 w-4 text-blue-600" />
+                  <p className="text-sm font-semibold text-blue-800">Período Piloto</p>
+                </div>
+                <p className="text-xs text-blue-700">
+                  Seu período piloto termina em <strong className="text-blue-900">{pilotoDaysLeft} dia{pilotoDaysLeft !== 1 ? 's' : ''}</strong>
+                  {conta.pilotoFim && (
+                    <> ({new Date(conta.pilotoFim).toLocaleDateString('pt-BR')})</>
+                  )}
+                </p>
+                {conta.pilotoInicio && (
+                  <p className="text-[10px] text-blue-500 mt-1">
+                    Início: {new Date(conta.pilotoInicio).toLocaleDateString('pt-BR')}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {isPilotoExpirado && (
+            <Card className="border-orange-300 bg-orange-50">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-orange-600" />
+                  <p className="text-sm font-semibold text-orange-800">Período Piloto Expirado</p>
+                </div>
+                <p className="text-xs text-orange-700">
+                  Seu período piloto expirou! Para continuar usando a plataforma, você precisa assinar o contrato PJ e efetuar o pagamento mensal.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-orange-300 text-orange-700 hover:bg-orange-100 text-xs"
+                  onClick={() => toast.info('Contrato PJ será disponibilizado em breve (integração com Asaas em andamento).')}
+                >
+                  <FileText className="h-3.5 w-3.5 mr-1.5" />
+                  Ver Contrato PJ
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {isAtivo && (
+            <Card className="border-green-200 bg-green-50">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <p className="text-sm font-semibold text-green-800">Conta Ativa — contrato PJ assinado.</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-green-300 text-green-700 hover:bg-green-100 text-xs"
+                  onClick={() => toast.info('Contrato PJ será disponibilizado em breve (integração com Asaas em andamento).')}
+                >
+                  <FileText className="h-3.5 w-3.5 mr-1.5" />
+                  Ver Contrato PJ
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Monthly fee */}
+          <Card className="border-gray-100">
+            <CardHeader className="pb-3 pt-4 px-4">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-red-600" />
+                Mensalidade
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <div className="flex items-center gap-3">
+                <span className={cn(
+                  'text-xl font-bold',
+                  (conta.statusEfetivo === 'piloto' || conta.status === 'piloto') && 'line-through text-gray-400'
+                )}>
+                  R$ {conta.mensalidade},00/mês
+                </span>
+                {(conta.statusEfetivo === 'piloto' || conta.status === 'piloto') && (
+                  <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">
+                    Isento durante o piloto
+                  </Badge>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Tab: Perfil ── */}
+        <TabsContent value="perfil" className="space-y-4 mt-4">
+          <Card className="border-gray-100">
+            <CardHeader className="pb-3 pt-4 px-4">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <UserCircle className="h-4 w-4 text-red-600" />
+                Editar Perfil
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-600">Endereço</Label>
+                <Input
+                  placeholder="Rua, número, bairro..."
+                  value={perfilEndereco}
+                  onChange={(e) => setPerfilEndereco(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-600">Telefone</Label>
+                <Input
+                  placeholder="(00) 00000-0000"
+                  value={perfilTelefone}
+                  onChange={(e) => setPerfilTelefone(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+              <Button
+                className="w-full bg-red-600 hover:bg-red-700 text-white h-10 text-sm"
+                onClick={handleSavePerfil}
+                disabled={savingPerfil}
+              >
+                {savingPerfil ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</>
+                ) : (
+                  <><Save className="h-4 w-4 mr-2" /> Salvar</>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* ── Modal de Revisão Pós-Upload ── */}
       <AnimatePresence>

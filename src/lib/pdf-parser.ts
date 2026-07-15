@@ -33,6 +33,9 @@ const MARKETING_PHRASES = new Set([
   'GARANTIA DE FRESQUURA', 'SEMPRE FRESCO',
   'QUALIDADE GARANTIDA', 'PRODUTO SELECIONADO',
   'FRESCURINHO', 'FRESCÃO', 'DA HORTA',
+  // Additional marketing fragments
+  'DE POR', 'DE R$', 'A PARTIR DE',
+  'APENAS R$', 'POR R$', 'POR UNITÁRIO',
 ])
 
 // Padrões de texto legal / rodapé
@@ -49,7 +52,7 @@ const LEGAL_PATTERNS = [
 ]
 
 // Padrão para detectar linhas que são apenas unidade
-const UNIT_ONLY = /^un\.?$/i
+const UNIT_ONLY = /^(un\.?|kg|g|ml|l|cx|pct|dz)$/i
 
 // Padrão para preços: R$ XX,XX seguido opcionalmente de unidade
 const PRICE_REGEX = /^R\$\s*(\d+[.,]\d{2})\s*(un\.?|kg|g|ml|l|cx|pct|pacote|dz|par)?/i
@@ -81,7 +84,7 @@ function isNoise(line: string): boolean {
   const trimmed = line.trim()
 
   if (!trimmed) return true
-  if (trimmed.length <= 2) return true
+  if (trimmed.length < 5 && !trimmed.includes('R$')) return true
   if (/^\d+$/.test(trimmed)) return true
   if (/^[^\w]+$/.test(trimmed)) return true
   if (UNIT_ONLY.test(trimmed)) return true
@@ -94,6 +97,7 @@ function isNoise(line: string): boolean {
   const upper = trimmed.toUpperCase().trim()
   if (MARKETING_PHRASES.has(upper)) return true
   if (/^DE\s+R\$\s*\d+[.,]\d{2}\s+POR\s+APENAS/i.test(trimmed)) return true
+  if (/por\s+apenas/i.test(trimmed)) return true
   if (PRICE_REGEX.test(trimmed) && trimmed.length < 20) return true
 
   for (const header of SECTION_HEADERS) {
@@ -209,6 +213,16 @@ function isValidProductLine(line: string): boolean {
   // Ruído geral
   if (isNoise(trimmed)) return false
 
+  // Reject lines that are entirely UPPERCASE and shorter than 40 chars (pure marketing headers)
+  if (trimmed.length < 40 && !/[a-záéíóúãõâêîôûç]/.test(trimmed) && /[A-ZÁÉÍÓÚÃÕÂÊÎÔÛÇ]/.test(trimmed)) return false
+
+  // Reject lines where more than 60% of characters are uppercase
+  const allLetters = trimmed.replace(/[^a-zA-ZÁÉÍÓÚÃÕÂÊÎÔÛÇàáéíóúãõâêîôûç]/g, '')
+  if (allLetters.length > 0) {
+    const upperCount = allLetters.replace(/[^A-ZÁÉÍÓÚÃÕÂÊÎÔÛÇ]/g, '').length
+    if (upperCount / allLetters.length > 0.6) return false
+  }
+
   // Precisa ter pelo menos 3 caracteres de letra
   const letters = trimmed.replace(/[^a-zA-ZÁÉÍÓÚÃÕÂÊÎÔÛÇàáéíóúãõâêîôûç]/g, '')
   if (letters.length < 3) return false
@@ -287,7 +301,18 @@ export function parseProdutosDoTexto(text: string): ProdutoExtraido[] {
     if (priceLineIndex >= 0) usedIndices.add(priceLineIndex)
   }
 
-  return produtos
+  // Post-processing dedup: if two products have the same normalized name (ignoring price),
+  // keep only the one with the longest name
+  const dedupMap = new Map<string, ProdutoExtraido>()
+  for (const p of produtos) {
+    const key = normalizeForDedup(p.nome)
+    const existing = dedupMap.get(key)
+    if (!existing || p.nome.length > existing.nome.length) {
+      dedupMap.set(key, p)
+    }
+  }
+
+  return Array.from(dedupMap.values())
 }
 
 /**

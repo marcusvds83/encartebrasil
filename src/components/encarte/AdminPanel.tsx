@@ -19,6 +19,7 @@ import {
   UserX,
   Clock,
   AlertTriangle,
+  Mail,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -65,6 +66,7 @@ interface AdminMercado {
   estado: string
   endereco?: string | null
   telefone?: string | null
+  cnpj?: string | null
   emailLogin: string
   status: string
   destaque: boolean
@@ -414,15 +416,9 @@ function MarketRow({
   onRefresh: () => void
 }) {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [contractOpen, setContractOpen] = useState(false)
 
   const changeStatus = async (newStatus: string) => {
-    // Ao ativar (ou cadastrar direto como ativo), avisa sobre contrato
-    if (newStatus === 'ativo' && m.status !== 'ativo') {
-      const ok = confirm(
-        `Ao ativar "${m.nome}", um contrato PJ deverá ser assinado em até 3 dias antes de encerrar o piloto para que o mercado efetue o pagamento mensal pela plataforma.\n\nDeseja prosseguir com a ativação?`
-      )
-      if (!ok) return
-    }
     setActionLoading(`status-${m.id}`)
     try {
       await api(`/api/admin/status/${m.id}`, {
@@ -430,6 +426,13 @@ function MarketRow({
         body: JSON.stringify({ status: newStatus }),
       })
       toast.success(`Status alterado para "${statusLabel(newStatus).replace(/ar$/, '')}"`)
+      // After activating (Piloto → Ativo), show prominent contract reminder
+      if (newStatus === 'ativo' && m.status !== 'ativo') {
+        toast.warning(
+          'Contrato PJ — O mercado precisa assinar o contrato PJ em até 3 dias úteis.',
+          { description: 'Clique no botão "Contrato" para gerenciar.', duration: 8000 },
+        )
+      }
       onRefresh()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao alterar status')
@@ -563,17 +566,68 @@ function MarketRow({
               {nextLabel}
             </Button>
 
-            {/* Contrato button - aparece quando ativo ou piloto expirado */}
+            {/* Contrato button - aparece quando ativo ou piloto */}
             {(m.status === 'ativo' || m.status === 'piloto') && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs h-7 border-green-200 text-green-600 hover:bg-green-50"
-                onClick={() => toast.info(`Contrato de "${m.nome}" será disponibilizado em breve.`)}
-              >
-                <FileText className="h-3 w-3 mr-1" />
-                Contrato
-              </Button>
+              <Dialog open={contractOpen} onOpenChange={setContractOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-7 border-green-200 text-green-600 hover:bg-green-50"
+                  >
+                    <FileText className="h-3 w-3 mr-1" />
+                    Contrato
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Contrato PJ — {m.nome}</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 mt-2">
+                    {/* Market info */}
+                    <div className="rounded-lg border bg-gray-50 p-3 space-y-1.5 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Nome</span>
+                        <span className="font-medium">{m.nome}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">CNPJ</span>
+                        <span className="font-medium font-mono">
+                          {m.cnpj ? m.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : '—'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Cidade/Estado</span>
+                        <span className="font-medium">{m.cidade}/{m.estado}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">E-mail</span>
+                        <span className="font-medium">{m.emailLogin}</span>
+                      </div>
+                    </div>
+                    {/* Placeholder notice */}
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                      <p className="font-medium mb-1">Contrato não disponível ainda</p>
+                      <p className="text-xs text-amber-700">
+                        O contrato PJ será exibido aqui após a integração com a API Asaas.
+                        Por enquanto, o contrato é gerenciado manualmente.
+                      </p>
+                    </div>
+                    {/* Send email button */}
+                    <Button
+                      variant="outline"
+                      className="w-full border-green-200 text-green-700 hover:bg-green-50"
+                      onClick={() => {
+                        toast.info('Funcionalidade em desenvolvimento — integração Asaas em andamento')
+                        setContractOpen(false)
+                      }}
+                    >
+                      <Mail className="h-4 w-4 mr-2" />
+                      Enviar link de contrato por e-mail
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             )}
 
             {/* Destaque toggle */}
