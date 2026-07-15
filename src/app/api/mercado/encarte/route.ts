@@ -46,19 +46,46 @@ export async function POST(req: NextRequest) {
     })
 
     // ── Extrai produtos do PDF usando parser inteligente ─────────────────
-    let produtosExtraidos: Array<{ nome: string; marca: string | null; preco: string; unidade: string | null }> = []
+    let produtosExtraidos: Array<{ nome: string; marca: string | null; preco: string; unidade: string | null; id?: string }> = []
     let logExtracao = 'PDF recebido. '
     try {
       const { produtos, textoBruto, totalPaginas } = await extrairProdutosDoPDF(buffer)
       console.log(`[encarte upload] parser: ${produtos.length} produtos, texto=${textoBruto.length}chars, paginas=${totalPaginas}`)
-      produtosExtraidos = produtos.map(p => ({
-        nome: p.nome,
-        marca: p.marca,
-        preco: p.preco,
-        unidade: p.unidade,
-      }))
-      if (produtos.length > 0) {
-        logExtracao += `Parser identificou ${produtos.length} produto(s). Revise antes de publicar.`
+
+      // ── Salva os produtos automaticamente no banco ───────────────────
+      let salvos = 0
+      for (const p of produtos) {
+        try {
+          const salvo = await db.produto.create({
+            encarteId: encarte.id,
+            mercadoId: session.id,
+            nome: p.nome,
+            marca: p.marca || null,
+            preco: p.preco,
+            unidade: p.unidade || null,
+            normalizado: p.nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
+            criadoEm: new Date().toISOString(),
+          })
+          produtosExtraidos.push({
+            id: salvo.id,
+            nome: p.nome,
+            marca: p.marca,
+            preco: p.preco,
+            unidade: p.unidade,
+          })
+          salvos++
+        } catch (prodErr: any) {
+          console.error(`[encarte upload] erro ao salvar produto "${p.nome}":`, prodErr?.message || prodErr)
+        }
+      }
+
+      if (salvos > 0) {
+        // Atualiza status do encarte para concluído
+        await db.encarte.update(encarte.id, {
+          statusExtracao: 'concluido',
+          extracaoLog: `Extração automática concluída. ${salvos} produto(s) salvo(s).`,
+        })
+        logExtracao += `${salvos} produto(s) extraído(s) e salvo(s) automaticamente.`
       } else if (textoBruto.length === 0) {
         logExtracao += `Nenhum texto foi extraído do PDF — provavelmente os produtos são imagens (Canva/Designer). O PDF precisa ter texto selecionável.`
       } else {

@@ -62,7 +62,62 @@ export async function GET(req: NextRequest) {
       resultados.push('Mercado demo ja existe')
     }
 
-    // 3. Cria encarte demo + produtos demo (se não existirem)
+    // 3. Garante que a coleção "listas" existe (cria placeholder se vazio)
+    try {
+      const listasExistentes = await (db.listaCompras as any).findMany?.({ where: { sessionId: '__setup_check__' } }) || []
+      if (!Array.isArray(listasExistentes) || listasExistentes.length === 0) {
+        // Tenta criar um doc placeholder para garantir que a coleção existe no Firestore
+        await db.listaCompras.create({
+          sessionId: '__setup_check__',
+          nome: '__setup__',
+          marca: null,
+          preco: null,
+          unidade: null,
+          checked: true,
+          mercadoNome: null,
+          criadoEm: new Date().toISOString(),
+        } as any)
+        // Remove o placeholder imediatamente
+        const placeholder = await (db.listaCompras as any).findMany?.({ where: { sessionId: '__setup_check__' } })
+        if (Array.isArray(placeholder) && placeholder.length > 0) {
+          await db.listaCompras.delete(placeholder[0].id)
+        }
+        resultados.push('Colecao "listas" verificada/criada')
+      } else {
+        resultados.push('Colecao "listas" ja existe')
+      }
+    } catch (listErr: any) {
+      resultados.push(`Aviso: nao foi possivel verificar colecao listas: ${listErr?.message || listErr}`)
+    }
+
+    // 4. Garante que a coleção "produtos" existe (cria placeholder se vazio)
+    try {
+      const prodsCheck = await (db.produto as any).findMany?.({ where: { encarteId: '__setup_check__', mercadoId: '__setup_check__' } }) || []
+      if (!Array.isArray(prodsCheck) || prodsCheck.length === 0) {
+        await db.produto.create({
+          encarteId: '__setup_check__',
+          mercadoId: '__setup_check__',
+          nome: '__setup__',
+          marca: null,
+          preco: 'R$ 0,00',
+          unidade: null,
+          normalizado: '__setup__',
+          criadoEm: new Date().toISOString(),
+        } as any)
+        // Remove placeholder
+        const ph = await (db.produto as any).findMany?.({ where: { encarteId: '__setup_check__', mercadoId: '__setup_check__' } })
+        if (Array.isArray(ph) && ph.length > 0) {
+          await db.produto.deleteMany({ where: { id: ph[0].id, encarteId: '__setup_check__', mercadoId: '__setup_check__' } })
+        }
+        resultados.push('Colecao "produtos" verificada/criada')
+      } else {
+        resultados.push('Colecao "produtos" ja existe')
+      }
+    } catch (prodErr: any) {
+      resultados.push(`Aviso: nao foi possivel verificar colecao produtos: ${prodErr?.message || prodErr}`)
+    }
+
+    // 5. Cria encarte demo + produtos demo (se não existirem)
     const encartesExistentes = await (db.encarte as any).findMany?.()
     if (!encartesExistentes || encartesExistentes.length === 0) {
       const agora = new Date().toISOString()

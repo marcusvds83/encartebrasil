@@ -865,7 +865,8 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
       const encarteId = result.encarte?.id
       const produtos = result.produtos || []
       if (produtos.length > 0) {
-        // Abre tela de revisão
+        toast.success(`${produtos.length} produto(s) extraído(s) e salvo(s) com sucesso!`)
+        // Abre tela de revisão para edição opcional
         setReviewEncarteId(encarteId)
         setReviewProdutos(produtos)
         setReviewOpen(true)

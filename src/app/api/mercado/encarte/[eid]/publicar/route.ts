@@ -48,8 +48,8 @@ export async function POST(
           criadoEm: new Date().toISOString(),
         })
         salvos++
-      } catch {
-        // ignora erro de produto individual
+      } catch (prodErr: any) {
+        console.error(`[encarte publicar] erro ao salvar produto "${p.nome}":`, prodErr?.message || prodErr)
       }
     }
 
