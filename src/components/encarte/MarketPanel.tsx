@@ -1080,6 +1080,13 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
           </CardTitle>
         </CardHeader>
         <CardContent className="px-4 pb-4">
+          {/* Aviso sobre formato do PDF */}
+          <div className="mb-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-800 leading-relaxed">
+            <span className="text-amber-500 text-base mt-0.5 shrink-0">⚠</span>
+            <span>
+              <strong>Formato do PDF:</strong> o encarte precisa conter os produtos em <strong>texto</strong> (nome + preço). Encartes feitos no Canva, Designer ou outras ferramentas de design que exportam os produtos como <strong>imagens</strong> (textos transformados em figura) não serão lidos pelo sistema. Certifique-se de que o PDF tenha texto selecionável.
+            </span>
+          </div>
           {uploading ? (
             <UploadLoading />
           ) : (
