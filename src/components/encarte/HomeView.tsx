@@ -12,6 +12,8 @@ import {
   ChevronRight,
   Star,
   Store,
+  Calendar,
+  Tag,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,6 +48,8 @@ interface EncarteDetail {
   id: string
   titulo: string
   pdfPath?: string | null
+  dataInicio?: string | null
+  dataFim?: string | null
   statusExtracao: string
   criadoEm: string
   _count: { produtos: number }
@@ -84,6 +88,12 @@ function getInitials(name: string): string {
     .map((w) => w[0])
     .join('')
     .toUpperCase()
+}
+
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso + 'T00:00:00')
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 function statusLabel(status: string): string {
@@ -331,10 +341,10 @@ function MarketDetailView({
           <div className="h-14 w-14 rounded-full bg-red-600 flex items-center justify-center text-white font-bold text-lg shrink-0">
             {getInitials(detail.nome)}
           </div>
-          <div>
-            <h2 className="text-lg font-bold">{detail.nome}</h2>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold truncate">{detail.nome}</h2>
             <p className="text-sm text-gray-500 flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5" />
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
               {detail.cidade}/{detail.estado}
               {detail.endereco && ` · ${detail.endereco}`}
             </p>
@@ -345,13 +355,14 @@ function MarketDetailView({
         </CardContent>
       </Card>
 
-      {/* Products */}
+      {/* All Products (flat list from active encartes) */}
       {detail.produtos.length > 0 && (
         <section>
-          <h3 className="font-semibold text-sm mb-3 text-gray-700">
-            Produtos ({detail.produtos.length})
+          <h3 className="font-semibold text-sm mb-3 text-gray-700 flex items-center gap-1.5">
+            <Package className="h-4 w-4 text-red-600" />
+            Produtos em promoção ({detail.produtos.length})
           </h3>
-          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
             {detail.produtos.map((p) => (
               <motion.div
                 key={p.id}
@@ -393,10 +404,11 @@ function MarketDetailView({
         </section>
       )}
 
-      {/* Encartes */}
+      {/* Encartes (with PDF and date info) */}
       {detail.encartes.length > 0 && (
         <section>
-          <h3 className="font-semibold text-sm mb-3 text-gray-700">
+          <h3 className="font-semibold text-sm mb-3 text-gray-700 flex items-center gap-1.5">
+            <FileText className="h-4 w-4 text-red-600" />
             Encartes ({detail.encartes.length})
           </h3>
           <div className="space-y-2">
@@ -410,10 +422,20 @@ function MarketDetailView({
                     <FileText className="h-4 w-4 text-red-500 shrink-0" />
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{e.titulo}</p>
-                      <p className="text-xs text-gray-400">
-                        {e._count.produtos} produto
-                        {e._count.produtos !== 1 ? 's' : ''}
-                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-xs text-gray-400">
+                          {e._count.produtos} produto
+                          {e._count.produtos !== 1 ? 's' : ''}
+                        </p>
+                        {(e.dataInicio || e.dataFim) && (
+                          <p className="text-[10px] text-gray-400 flex items-center gap-0.5">
+                            <Calendar className="h-2.5 w-2.5" />
+                            {formatDate(e.dataInicio)}
+                            {(e.dataInicio || e.dataFim) && ' — '}
+                            {formatDate(e.dataFim)}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -499,7 +521,8 @@ function MarketDetailView({
       {detail.produtos.length === 0 && detail.encartes.length === 0 && (
         <div className="text-center py-12 text-gray-400">
           <FileText className="h-10 w-10 mx-auto mb-2 opacity-50" />
-          <p className="text-sm">Nenhum encarte ou produto disponível</p>
+          <p className="text-sm">Nenhuma promoção vigente no momento</p>
+          <p className="text-xs mt-1">Volte em breve para conferir novas ofertas</p>
         </div>
       )}
     </div>
@@ -526,9 +549,11 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
   const [mercados, setMercados] = useState<MercadoSummary[]>([])
   const [destaques, setDestaques] = useState<MercadoSummary[]>([])
   const [maisBaratos, setMaisBaratos] = useState<any[]>([])
-  const [search, setSearch] = useState('')
+  const [searchProduto, setSearchProduto] = useState('')
+  const [searchMercado, setSearchMercado] = useState('')
   const [cityFilter, setCityFilter] = useState<string>('all')
   const [loading, setLoading] = useState(true)
+  const [loadingProdutos, setLoadingProdutos] = useState(true)
   const [selectedMercado, setSelectedMercado] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -553,12 +578,23 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
     }
   }, [])
 
-  // Fetch mais baratos
+  // Fetch mais baratos (with optional search)
   useEffect(() => {
-    api<{ produtos: any[] }>('/api/produtos/mais-baratos?limit=20')
-      .then((d) => setMaisBaratos(d.produtos || []))
+    let cancelled = false
+    setLoadingProdutos(true)
+    const q = searchProduto.trim() ? `&busca=${encodeURIComponent(searchProduto.trim())}` : ''
+    api<{ produtos: any[] }>(`/api/produtos/mais-baratos?limit=30${q}`)
+      .then((d) => {
+        if (!cancelled) setMaisBaratos(d.produtos || [])
+      })
       .catch(() => {})
-  }, [])
+      .finally(() => {
+        if (!cancelled) setLoadingProdutos(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [searchProduto])
 
   // Unique cities
   const cities = useMemo(() => {
@@ -566,7 +602,7 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
     return Array.from(set).sort()
   }, [mercados])
 
-  // Filtered markets
+  // Filtered markets by name/city
   const filtered = useMemo(() => {
     let list = mercados
     if (cityFilter !== 'all') {
@@ -574,8 +610,8 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
         (m) => `${m.cidade}/${m.estado}` === cityFilter,
       )
     }
-    if (search.trim()) {
-      const q = search.toLowerCase().trim()
+    if (searchMercado.trim()) {
+      const q = searchMercado.toLowerCase().trim()
       list = list.filter(
         (m) =>
           m.nome.toLowerCase().includes(q) ||
@@ -584,7 +620,13 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
       )
     }
     return list
-  }, [mercados, cityFilter, search])
+  }, [mercados, cityFilter, searchMercado])
+
+  // Destaques that are NOT in the filtered list (to avoid duplicates)
+  const destaquesUnicos = useMemo(() => {
+    const ids = new Set(filtered.map((m) => m.id))
+    return destaques.filter((d) => ids.has(d.id))
+  }, [destaques, filtered])
 
   // ── Detail mode ─────────────────────────────────────────────────────
   if (selectedMercado) {
@@ -613,28 +655,60 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
         </button>
       )}
 
-      {/* Mais baratos — seção de produtos ordenados por preço */}
-      {maisBaratos.length > 0 && (
-        <section>
-          <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
-            <Package className="h-4 w-4 text-red-600" /> Mais baratos agora
-          </h2>
+      {/* ═══════════════════════════════════════════════════════════════
+          SEÇÃO 1: Itens mais baratos em promoção (com busca por produto)
+          ═══════════════════════════════════════════════════════════════ */}
+      <section>
+        <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
+          <Tag className="h-4 w-4 text-red-600" /> Itens mais baratos em promoção
+        </h2>
+
+        {/* Busca por produto */}
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            placeholder="Buscar produto (ex: arroz, leite, feijão...)"
+            className="pl-9 h-10"
+            value={searchProduto}
+            onChange={(e) => setSearchProduto(e.target.value)}
+          />
+        </div>
+
+        {loadingProdutos ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-            {maisBaratos.slice(0, 8).map((p) => (
-              <button
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-28 rounded-lg" />
+            ))}
+          </div>
+        ) : maisBaratos.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">
+              {searchProduto
+                ? 'Nenhum produto encontrado para esta busca'
+                : 'Nenhum produto em promoção no momento'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            {maisBaratos.slice(0, 12).map((p) => (
+              <motion.button
                 key={p.id}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => onAddToList({
                   produtoId: p.id,
-                  mercadoId: p.mercado?.id || '',
+                  mercadoId: p.mercado?.id || p.mercadoId || '',
                   nome: p.nome,
                   marca: p.marca,
                   preco: p.preco,
                   unidade: p.unidade,
                   mercadoNome: p.mercado?.nome,
                 })}
-                className="text-left bg-white border border-gray-200 rounded-lg p-2.5 hover:border-red-300 hover:shadow-sm transition-all"
+                className="text-left bg-white border border-gray-200 rounded-lg p-2.5 hover:border-red-300 hover:shadow-sm transition-all relative group"
               >
-                <p className="text-[11px] text-gray-400 truncate">
+                {/* Badget do mercado */}
+                <p className="text-[10px] text-gray-400 truncate flex items-center gap-0.5">
+                  <Store className="h-2.5 w-2.5" />
                   {p.mercado?.nome || '—'}
                 </p>
                 <p className="text-xs font-medium text-gray-800 leading-tight mt-0.5 line-clamp-2">
@@ -643,52 +717,30 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
                 {p.marca && (
                   <p className="text-[10px] text-gray-500 truncate">{p.marca}</p>
                 )}
-                <p className="text-sm font-bold text-red-600 mt-1">{p.preco}</p>
+                <div className="flex items-center justify-between mt-1.5">
+                  <p className="text-sm font-bold text-red-600">{p.preco}</p>
+                  <Plus className="h-4 w-4 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
                 {p.unidade && (
                   <p className="text-[10px] text-gray-400">{p.unidade}</p>
                 )}
-              </button>
+              </motion.button>
             ))}
           </div>
-        </section>
-      )}
+        )}
+      </section>
 
-      {/* Search + Filter */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Buscar mercado por nome ou cidade..."
-            className="pl-9 h-10"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Select value={cityFilter} onValueChange={setCityFilter}>
-          <SelectTrigger className="w-full sm:w-[200px] h-10">
-            <MapPin className="h-4 w-4 mr-2 text-gray-400" />
-            <SelectValue placeholder="Todas as cidades" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as cidades</SelectItem>
-            {cities.map((c) => (
-              <SelectItem key={c} value={c}>
-                {c}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Destaques */}
-      {destaques.length > 0 && (
+      {/* ═══════════════════════════════════════════════════════════════
+          SEÇÃO 2: Mercados em destaque (patrocinados)
+          ═══════════════════════════════════════════════════════════════ */}
+      {destaquesUnicos.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
-            <Star className="h-4 w-4 text-amber-500" /> Destaques
+            <Star className="h-4 w-4 text-amber-500" /> Mercados em destaque
           </h2>
           <ScrollArea className="w-full" ref={scrollRef}>
             <div className="flex gap-4 pb-2">
-              {destaques.map((m) => (
+              {destaquesUnicos.map((m) => (
                 <DestaqueCard
                   key={m.id}
                   m={m}
@@ -701,11 +753,40 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
         </section>
       )}
 
-      {/* Market Grid */}
+      {/* ═══════════════════════════════════════════════════════════════
+          SEÇÃO 3: Todos os mercados cadastrados (com busca e filtro por região)
+          ═══════════════════════════════════════════════════════════════ */}
       <section>
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">
-          Mercados ({filtered.length})
+        <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
+          <Store className="h-4 w-4 text-red-600" /> Mercados
         </h2>
+
+        {/* Search + Region Filter */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Buscar mercado por nome..."
+              className="pl-9 h-10"
+              value={searchMercado}
+              onChange={(e) => setSearchMercado(e.target.value)}
+            />
+          </div>
+          <Select value={cityFilter} onValueChange={setCityFilter}>
+            <SelectTrigger className="w-full sm:w-[200px] h-10">
+              <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+              <SelectValue placeholder="Todas as regiões" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as regiões</SelectItem>
+              {cities.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -717,7 +798,7 @@ export default function HomeView({ sessionId, onAddToList, onPainelMercado }: Ho
           <div className="text-center py-16 text-gray-400">
             <Search className="h-10 w-10 mx-auto mb-3 opacity-50" />
             <p className="text-sm">Nenhum mercado encontrado</p>
-            <p className="text-xs mt-1">Tente ajustar os filtros</p>
+            <p className="text-xs mt-1">Tente ajustar os filtros de busca ou região</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

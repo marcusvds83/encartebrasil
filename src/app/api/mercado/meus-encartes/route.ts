@@ -20,10 +20,15 @@ export async function GET() {
     }
 
     // Formata encartes com produtos
+    const agora = new Date().toISOString()
+
     const encartes = (detail.encartes || []).map((e: any) => ({
       id: e.id,
       titulo: e.titulo,
       pdfPath: e.pdfPath,
+      dataInicio: e.dataInicio || null,
+      dataFim: e.dataFim || null,
+      expirado: e.dataFim && new Date(e.dataFim) < new Date(agora) ? true : false,
       statusExtracao: e.statusExtracao,
       extracaoLog: e.extracaoLog,
       criadoEm: e.criadoEm,

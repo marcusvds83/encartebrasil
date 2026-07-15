@@ -574,6 +574,8 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
 
   // Upload state
   const [titulo, setTitulo] = useState('')
+  const [dataInicio, setDataInicio] = useState('')
+  const [dataFim, setDataFim] = useState('')
   const [uploading, setUploading] = useState(false)
 
   // Profile editing state
@@ -605,6 +607,18 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
       toast.error('Informe o título do encarte')
       return
     }
+    if (!dataInicio) {
+      toast.error('Informe a data de início da promoção')
+      return
+    }
+    if (!dataFim) {
+      toast.error('Informe a data de fim da promoção')
+      return
+    }
+    if (new Date(dataFim) < new Date(dataInicio)) {
+      toast.error('Data fim deve ser igual ou posterior à data início')
+      return
+    }
     const input = document.getElementById('pdf-upload') as HTMLInputElement
     const file = input?.files?.[0]
     if (!file) {
@@ -615,6 +629,8 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
     try {
       const fd = new FormData()
       fd.append('titulo', titulo.trim())
+      fd.append('dataInicio', dataInicio)
+      fd.append('dataFim', dataFim)
       fd.append('pdf', file)
       const result = await api<{ ok: boolean; produtosExtraidos: number; log?: string; erro?: string }>('/api/mercado/encarte', {
         method: 'POST',
@@ -631,6 +647,8 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
         toast.success('Encarte enviado! Nenhum produto foi extraído automaticamente (PDF pode ser imagem ou sem preços visíveis).', { duration: 6000 })
       }
       setTitulo('')
+      setDataInicio('')
+      setDataFim('')
       if (input) input.value = ''
       // Refresh
       api<{ encartes: EncarteItem[] }>(`/api/mercados/${conta.id}`)
@@ -807,31 +825,55 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
           </CardTitle>
         </CardHeader>
         <CardContent className="px-4 pb-4">
-          <form onSubmit={handleUpload} className="flex flex-col sm:flex-row gap-3">
+          <form onSubmit={handleUpload} className="flex flex-col gap-3">
             <Input
               placeholder="Título do encarte"
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
-              className="flex-1 h-10"
+              className="h-10"
             />
-            <input
-              id="pdf-upload"
-              type="file"
-              accept=".pdf"
-              className="text-xs text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-orange-50 file:text-red-700 hover:file:bg-red-50"
-            />
-            <Button
-              type="submit"
-              className="bg-red-600 hover:bg-red-700 text-white h-10 shrink-0"
-              disabled={uploading}
-            >
-              {uploading ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Upload className="h-4 w-4 mr-2" />
-              )}
-              Enviar
-            </Button>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs text-gray-600">Início da promoção *</Label>
+                <Input
+                  type="date"
+                  value={dataInicio}
+                  onChange={(e) => setDataInicio(e.target.value)}
+                  className="h-10 text-sm"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-gray-600">Fim da promoção *</Label>
+                <Input
+                  type="date"
+                  value={dataFim}
+                  onChange={(e) => setDataFim(e.target.value)}
+                  className="h-10 text-sm"
+                  required
+                />
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                id="pdf-upload"
+                type="file"
+                accept=".pdf"
+                className="text-xs text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-orange-50 file:text-red-700 hover:file:bg-red-50 flex-1"
+              />
+              <Button
+                type="submit"
+                className="bg-red-600 hover:bg-red-700 text-white h-10 shrink-0"
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4 mr-2" />
+                )}
+                Enviar
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
@@ -989,12 +1031,22 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
                     <div className="flex items-center gap-2 min-w-0">
                       <FileText className="h-4 w-4 text-red-500 shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {e.titulo}
-                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium truncate">
+                            {e.titulo}
+                          </p>
+                          {(e as any).expirado && (
+                            <Badge variant="outline" className="text-[9px] text-gray-400 border-gray-300 shrink-0">
+                              Expirado
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-xs text-gray-400">
                           {numProdutos} produto{numProdutos !== 1 ? 's' : ''} ·{' '}
                           {extracaoLabel(e.statusExtracao)}
+                          {(e as any).dataInicio && (
+                            <> · {(e as any).dataInicio.split('T')[0].split('-').reverse().join('/')} — {(e as any).dataFim ? (e as any).dataFim.split('T')[0].split('-').reverse().join('/') : '—'}</>
+                          )}
                         </p>
                       </div>
                     </div>

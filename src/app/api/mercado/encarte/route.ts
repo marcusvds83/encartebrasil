@@ -150,8 +150,17 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData()
     const file = formData.get('pdf') as File | null
     const titulo = formData.get('titulo') as string | null
+    const dataInicio = formData.get('dataInicio') as string | null
+    const dataFim = formData.get('dataFim') as string | null
     if (!file || !titulo) {
       return NextResponse.json({ erro: 'PDF e título obrigatórios' }, { status: 400 })
+    }
+    if (!dataInicio || !dataFim) {
+      return NextResponse.json({ erro: 'Data início e fim da promoção são obrigatórias' }, { status: 400 })
+    }
+    // Validação: dataFim deve ser >= dataInicio
+    if (new Date(dataFim) < new Date(dataInicio)) {
+      return NextResponse.json({ erro: 'Data fim deve ser igual ou posterior à data início' }, { status: 400 })
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
@@ -165,6 +174,8 @@ export async function POST(req: NextRequest) {
       mercadoId: session.id,
       titulo,
       pdfPath: filename,
+      dataInicio,
+      dataFim,
       statusExtracao: 'processando',
       extracaoLog: 'PDF recebido, iniciando extração...',
       criadoEm: new Date().toISOString(),
