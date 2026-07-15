@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { sessionCookie, type SessionData } from '@/lib/auth'
 import { createHash } from 'crypto'
+import { emailBoasVindasMercado } from '@/lib/email'
 
 function soDigitos(s: string) {
   return (s || '').replace(/\D/g, '')
@@ -99,6 +100,10 @@ export async function POST(req: NextRequest) {
     const cookie = sessionCookie(data)
     const res = NextResponse.json({ ok: true, tipo: 'mercado', ...data })
     res.cookies.set(cookie)
+
+    // Envia e-mail de boas-vindas (fire-and-forget, não bloqueia o cadastro)
+    emailBoasVindasMercado(nome, email).catch(() => {})
+
     return res
   } catch (e) {
     console.error('[cadastro-mercado] erro:', e)

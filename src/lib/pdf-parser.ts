@@ -99,7 +99,7 @@ const SECTION_HEADERS = [
 function isNoise(line: string): boolean {
   const trimmed = line.trim()
   if (!trimmed) return true
-  if (trimmed.length < 4) return true
+  if (trimmed.length < 3) return true
   if (/^\d+$/.test(trimmed)) return true
   if (/^[^\wáéíóúãõâêîôûçÁÉÍÓÚÃÕÂÊÎÔÛÇ]+$/i.test(trimmed)) return true
   if (UNIT_ONLY.test(trimmed)) return true
@@ -249,6 +249,30 @@ function tryParseInline(line: string): ProdutoExtraido | null {
 }
 
 /**
+ * Divide uma linha que contém múltiplos preços R$ em segmentos,
+ * cada um potencialmente um produto. Útil quando pdfjs funde colunas.
+ * Ex: "Banana kg R$ 4,99  Arroz 5kg R$ 24,90" → ["Banana kg R$ 4,99", "Arroz 5kg R$ 24,90"]
+ */
+function splitMultiPrice(line: string): string[] {
+  const matches = [...line.matchAll(/R\$\s*\d+[.,]\d{2}/g)]
+  if (matches.length <= 1) return [line]
+
+  const segments: string[] = []
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].index!
+    const end = matches[i].index! + matches[i][0].length
+    // Texto antes deste preço (desde o fim do segmento anterior ou início da linha)
+    const segStart = i === 0 ? 0 : (matches[i - 1].index! + matches[i - 1][0].length)
+    const before = line.substring(segStart, start).trim()
+    const priceAndAfter = line.substring(start, i < matches.length - 1 ? matches[i + 1].index! : undefined).trim()
+    // Junta o texto antes com o preço
+    const segment = (before + ' ' + priceAndAfter).trim()
+    if (segment.length > 5) segments.push(segment)
+  }
+  return segments
+}
+
+/**
  * Parser principal
  */
 export function parseProdutosDoTexto(text: string): ProdutoExtraido[] {
@@ -263,6 +287,26 @@ export function parseProdutosDoTexto(text: string): ProdutoExtraido[] {
     if (isNoise(lines[i])) continue
     // Skip se começa com R$ (é preço em linha separada, trata no passo 2)
     if (PRICE_LINE_REGEX.test(lines[i])) continue
+
+    // Verifica se a linha tem múltiplos preços (colunas fundidas)
+    const priceMatches = lines[i].match(/R\$\s*\d+[.,]\d{2}/g)
+    if (priceMatches && priceMatches.length > 1) {
+      // Divide em segmentos e processa cada um
+      const segments = splitMultiPrice(lines[i])
+      for (const seg of segments) {
+        if (isNoise(seg)) continue
+        const inline = tryParseInline(seg)
+        if (!inline) continue
+        if (isNoise(inline.nome)) continue
+        if (inline.nome.length < 3) continue
+        const dedupKey = `${normalizeForDedup(inline.nome)}|${inline.preco}`
+        if (seenKeys.has(dedupKey)) continue
+        seenKeys.add(dedupKey)
+        produtos.push(inline)
+      }
+      usedIndices.add(i)
+      continue
+    }
 
     const inline = tryParseInline(lines[i])
     if (!inline) continue
@@ -360,9 +404,70 @@ export function parseProdutosDoTexto(text: string): ProdutoExtraido[] {
 }
 
 /**
+ * Extrai texto via pdfjs-dist (sem worker, compatível com serverless/Render).
+ * Usa threshold de Y=6 para agrupar itens na mesma linha visual.
+ */
+async function extractWithPdfjs(pdfBuffer: Buffer | Uint8Array): Promise<{ text: string; pages: number }> {
+  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.js').then((m: any) => m.default || m)
+  const uint8 = pdfBuffer instanceof Buffer ? new Uint8Array(pdfBuffer) : pdfBuffer
+  const doc = await pdfjsLib.getDocument({
+    data: uint8,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  }).promise
+  const totalPages = doc.numPages
+  const allLines: string[] = []
+  const Y_THRESHOLD = 6 // tolerância maior para PDFs de encarte
+
+  for (let i = 1; i <= totalPages; i++) {
+    const page = await doc.getPage(i)
+    const content = await page.getTextContent()
+    const items = (content.items as any[])
+      .filter((it: any) => it.str && it.str.trim().length > 0)
+      .map((it: any) => ({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width || 0 }))
+
+    if (items.length === 0) continue
+    // Ordena: Y decrescente (topo→baixo), depois X crescente (esquerda→direita)
+    items.sort((a: any, b: any) => {
+      const yd = b.y - a.y
+      return Math.abs(yd) > Y_THRESHOLD ? yd : a.x - b.x
+    })
+
+    // Agrupa itens na mesma linha visual
+    let line = [items[0]]
+    let ly = items[0].y
+    for (let j = 1; j < items.length; j++) {
+      const yd = Math.abs(items[j].y - ly)
+      if (yd > Y_THRESHOLD) {
+        allLines.push(line.map((it: any) => it.str).join(' '))
+        line = [items[j]]
+        ly = items[j].y
+      } else {
+        // Só adiciona gap se o item não está colado no anterior
+        const prevItem = line[line.length - 1]
+        const xGap = items[j].x - (prevItem.x + prevItem.w)
+        if (xGap > 15) {
+          // Gap grande — possível separação de coluna, adiciona como outra linha
+          allLines.push(line.map((it: any) => it.str).join(' '))
+          line = [items[j]]
+          ly = items[j].y
+        } else {
+          line.push(items[j])
+        }
+      }
+    }
+    allLines.push(line.map((it: any) => it.str).join(' '))
+  }
+
+  await doc.destroy()
+  return { text: allLines.join('\n'), pages: totalPages }
+}
+
+/**
  * Extrai texto de um buffer de PDF e retorna os produtos.
- * Método 1: PDFParse (pdf-parse v2) — melhor reconstrução de linhas/colunas
- * Método 2: pdfjs-dist direto — fallback mais robusto no Render
+ * Tenta PDFParse primeiro (melhor para colunas); se falhar ou retornar pouco texto,
+ * usa pdfjs-dist como fallback. Escolhe o método com MAIS texto.
  */
 export async function extrairProdutosDoPDF(pdfBuffer: Buffer | Uint8Array): Promise<{
   produtos: ProdutoExtraido[]
@@ -372,65 +477,43 @@ export async function extrairProdutosDoPDF(pdfBuffer: Buffer | Uint8Array): Prom
   let textoBruto = ''
   let totalPaginas = 0
 
-  // Método 1: PDFParse (melhor para colunas lado a lado)
+  // Tenta ambos os métodos e fica com o que extrair mais texto
+  const resultados: Array<{ texto: string; paginas: number; metodo: string }> = []
+
+  // Método 1: PDFParse (pdf-parse v2) — melhor reconstrução de linhas/colunas
   try {
     const { PDFParse } = await import('pdf-parse')
     const uint8 = pdfBuffer instanceof Buffer ? new Uint8Array(pdfBuffer) : pdfBuffer
     const parser = new PDFParse(uint8)
     const result = await parser.getText()
-    textoBruto = result.text || ''
-    totalPaginas = result.pages?.length || 0
-    console.log(`[pdf-parser] PDFParse: ${textoBruto.length} chars, ${totalPaginas} páginas`)
-  } catch (e1: any) {
-    console.error('[pdf-parser] PDFParse falhou:', e1?.message || e1)
-
-    // Método 2: pdfjs-dist direto (sem worker, mais robusto)
-    try {
-      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.js').then((m: any) => m.default || m)
-      const uint8 = pdfBuffer instanceof Buffer ? new Uint8Array(pdfBuffer) : pdfBuffer
-      const doc = await pdfjsLib.getDocument({
-        data: uint8,
-        useWorkerFetch: false,
-        isEvalSupported: false,
-        useSystemFonts: true,
-      }).promise
-      totalPaginas = doc.numPages
-      const allLines: string[] = []
-
-      for (let i = 1; i <= totalPaginas; i++) {
-        const page = await doc.getPage(i)
-        const content = await page.getTextContent()
-        const items = (content.items as any[])
-          .filter((it: any) => it.str && it.str.trim().length > 0)
-          .map((it: any) => ({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width || 0 }))
-
-        if (items.length === 0) continue
-        items.sort((a: any, b: any) => {
-          const yd = b.y - a.y
-          return Math.abs(yd) > 3 ? yd : a.x - b.x
-        })
-
-        let line = [items[0]]
-        let ly = items[0].y
-        for (let j = 1; j < items.length; j++) {
-          const yd = Math.abs(items[j].y - ly)
-          if (yd > 3) {
-            allLines.push(line.map((it: any) => it.str).join(' '))
-            line = [items[j]]
-            ly = items[j].y
-          } else {
-            line.push(items[j])
-          }
-        }
-        allLines.push(line.map((it: any) => it.str).join(' '))
-      }
-
-      textoBruto = allLines.join('\n')
-      await doc.destroy()
-      console.log(`[pdf-parser] pdfjs-dist fallback: ${textoBruto.length} chars, ${totalPaginas} páginas`)
-    } catch (e2: any) {
-      console.error('[pdf-parser] pdfjs-dist também falhou:', e2?.message || e2)
+    const text = result.text || ''
+    if (text.length > 0) {
+      resultados.push({ texto: text, paginas: result.pages?.length || 0, metodo: 'PDFParse' })
+      console.log(`[pdf-parser] PDFParse OK: ${text.length} chars, ${result.pages?.length || 0} páginas`)
+    } else {
+      console.log('[pdf-parser] PDFParse retornou texto vazio, tentando fallback...')
     }
+  } catch (e1: any) {
+    console.warn('[pdf-parser] PDFParse falhou:', e1?.message || e1)
+  }
+
+  // Método 2: pdfjs-dist direto (sem worker, mais robusto no Render)
+  try {
+    const { text, pages } = await extractWithPdfjs(pdfBuffer)
+    if (text.length > 0) {
+      resultados.push({ texto: text, paginas: pages, metodo: 'pdfjs-dist' })
+      console.log(`[pdf-parser] pdfjs-dist OK: ${text.length} chars, ${pages} páginas`)
+    }
+  } catch (e2: any) {
+    console.warn('[pdf-parser] pdfjs-dist falhou:', e2?.message || e2)
+  }
+
+  // Escolhe o resultado com mais texto
+  if (resultados.length > 0) {
+    resultados.sort((a, b) => b.texto.length - a.texto.length)
+    textoBruto = resultados[0].texto
+    totalPaginas = resultados[0].paginas
+    console.log(`[pdf-parser] Método escolhido: ${resultados[0].metodo} (${textoBruto.length} chars)`)
   }
 
   const produtos = parseProdutosDoTexto(textoBruto)

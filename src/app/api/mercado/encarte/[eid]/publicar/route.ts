@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { emailEncartePublicado } from '@/lib/email'
 
 export async function POST(
   req: NextRequest,
@@ -58,6 +59,11 @@ export async function POST(
       statusExtracao: 'concluido',
       extracaoLog: `Publicação concluída. ${salvos} produto(s) salvo(s).`,
     })
+
+    // Notifica o mercado por e-mail (fire-and-forget)
+    if (salvos > 0 && session.email) {
+      emailEncartePublicado(session.nome || 'Mercado', session.email, encarte.titulo, salvos).catch(() => {})
+    }
 
     return NextResponse.json({ ok: true, totalSalvos: salvos })
   } catch (e: any) {

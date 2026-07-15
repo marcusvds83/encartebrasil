@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { sessionCookie, type SessionData } from '@/lib/auth'
 import { createHash } from 'crypto'
+import { emailBoasVindasConsumidor } from '@/lib/email'
 
 function hashSenha(s: string) {
   return createHash('sha256').update(s).digest('hex')
@@ -56,6 +57,10 @@ export async function POST(req: NextRequest) {
     const cookie = sessionCookie(data)
     const res = NextResponse.json({ ok: true, tipo: 'usuario', ...data })
     res.cookies.set(cookie)
+
+    // Envia e-mail de boas-vindas (fire-and-forget)
+    emailBoasVindasConsumidor(nome || '', email).catch(() => {})
+
     return res
   } catch (e) {
     console.error('[cadastro] erro:', e)

@@ -239,15 +239,23 @@ export const db = {
       return { id: ref.id, ...data }
     },
 
-    deleteMany: async (opts: { where: { id: string; encarteId: string; mercadoId: string } }) => {
-      const snap = await getDocs(
-        query(
-          collection(firestore as any, COLS.produtos),
-          where('id', '==', opts.where.id)
+    deleteMany: async (opts: { where: { id?: string; encarteId?: string; mercadoId?: string } }) => {
+      // Monta constraints dinamicamente baseado nos campos fornecidos
+      const constraints: QueryConstraint[] = []
+      if (opts.where.encarteId) {
+        constraints.push(where('encarteId', '==', opts.where.encarteId))
+      }
+      if (opts.where.mercadoId) {
+        constraints.push(where('mercadoId', '==', opts.where.mercadoId))
+      }
+
+      if (constraints.length > 0) {
+        const snap = await getDocs(
+          query(collection(firestore as any, COLS.produtos), ...constraints)
         )
-      )
-      for (const d of snap.docs) {
-        await deleteDoc(d.ref)
+        for (const d of snap.docs) {
+          await deleteDoc(d.ref)
+        }
       }
     },
 
