@@ -3,143 +3,7 @@ import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
-
-/**
- * Extrai produtos de um texto de encarte (PDF).
- * Procura por linhas com padrão: NOME PRODUTO ... R$ XX,XX
- */
-interface ProdutoExtraido {
-  nome: string
-  marca?: string | null
-  preco: string
-  unidade?: string | null
-}
-
-function extrairProdutosDoTexto(texto: string): ProdutoExtraido[] {
-  const produtos: ProdutoExtraido[] = []
-  const vistos = new Set<string>()
-
-  // Padrão 1: Linhas com preço no formato R$ XX,XX ou XX,XX
-  const linhas = texto.split(/\r?\n/)
-
-  const precoRegex = /R\$\s*(\d{1,4}(?:\.\d{3})*,\d{2})/g
-  const unidadeRegex = /\b(\d+(?:,\d+)?)\s*(kg|g|ml|l|litro|litros|un|unidade|pct|pack|cx|caixa|lata|garrafa|frasco|saco|pacote|bandeja|grama|gramas)\b/i
-
-  for (const linhaOriginal of linhas) {
-    const linha = linhaOriginal.trim()
-    if (linha.length < 3 || linha.length > 200) continue
-
-    const precos = [...linha.matchAll(precoRegex)]
-    if (precos.length === 0) continue
-
-    const preco = `R$ ${precos[0][1]}`
-    let nome = linha.replace(precoRegex, '').replace(/\s+/g, ' ').trim()
-    nome = nome.replace(/^[\d\.\-\*]+\s*/, '').trim()
-
-    const unidadeMatch = nome.match(unidadeRegex)
-    let unidade: string | null = null
-    if (unidadeMatch) {
-      unidade = `${unidadeMatch[1]}${unidadeMatch[2]}`
-    }
-
-    if (nome.length < 3) continue
-
-    const chave = `${nome}|${preco}`
-    if (vistos.has(chave)) continue
-    vistos.add(chave)
-
-    produtos.push({
-      nome: nome.substring(0, 100),
-      marca: null,
-      preco,
-      unidade,
-    })
-  }
-
-  // Padrão 2: texto em uma linha só (pdfjs junta tudo)
-  // Procura por "Nome Produto R$ XX,XX" em sequência
-  if (produtos.length === 0) {
-    const regexInline = /([A-ZÁÉÍÓÚÂÊÔÃÕÇa-záéíóúâêôãõç][A-ZÁÉÍÓÚÂÊÔÃÕÇa-záéíóúâêôãõç\s\d\.,-]{2,80}?)\s+R\$\s*(\d{1,4}(?:\.\d{3})*,\d{2})/g
-    let match
-    while ((match = regexInline.exec(texto)) !== null) {
-      const nome = match[1].trim().replace(/^[\d\.\-\*]+\s*/, '').trim()
-      const preco = `R$ ${match[2]}`
-      if (nome.length < 3) continue
-      const chave = `${nome}|${preco}`
-      if (vistos.has(chave)) continue
-      vistos.add(chave)
-
-      const unidadeMatch = nome.match(unidadeRegex)
-      produtos.push({
-        nome: nome.substring(0, 100),
-        marca: null,
-        preco,
-        unidade: unidadeMatch ? `${unidadeMatch[1]}${unidadeMatch[2]}` : null,
-      })
-    }
-  }
-
-  return produtos
-}
-
-/** Extrai texto de um PDF usando pdfjs-dist (worker desabilitado) */
-async function extrairTextoPDF(buffer: Buffer): Promise<string> {
-  let workerSrc: string | null = null
-  try {
-    const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js')
-    const path = require('path')
-    const fs = require('fs')
-
-    // Tenta encontrar o worker no node_modules
-    const workerPaths = [
-      path.join(process.cwd(), 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.js'),
-      path.join(__dirname, '..', '..', '..', '..', 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.js'),
-      path.join(__dirname, '..', '..', '..', '..', '..', '..', 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.js'),
-    ]
-    for (const p of workerPaths) {
-      if (fs.existsSync(p)) {
-        workerSrc = p
-        break
-      }
-    }
-
-    // Se encontrou o worker, configura; senão, tenta sem worker
-    if (workerSrc && pdfjsLib.GlobalWorkerOptions) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
-    }
-
-    const uint8 = new Uint8Array(buffer)
-    const doc = await pdfjsLib.getDocument({
-      data: uint8,
-      disableFontFace: true,
-      useSystemFonts: false,
-      isEvalSupported: false,
-      // Passa o worker port diretamente para evitar problema de path
-      worker: workerSrc ? new pdfjsLib.PDFWorker() : undefined,
-    }).promise
-
-    let allText = ''
-    for (let i = 1; i <= doc.numPages; i++) {
-      const page = await doc.getPage(i)
-      const content = await page.getTextContent()
-      let lastY: number | null = null
-      const parts: string[] = []
-      for (const item of content.items as any[]) {
-        const y = item.transform?.[5]
-        if (lastY !== null && y !== undefined && Math.abs(y - lastY) > 5) {
-          parts.push('\n')
-        }
-        parts.push(item.str)
-        if (y !== undefined) lastY = y
-      }
-      allText += parts.join(' ') + '\n'
-    }
-    return allText
-  } catch (e: any) {
-    console.error('[pdf] erro ao extrair texto:', e?.message || String(e))
-    throw new Error('Falha ao extrair texto do PDF: ' + (e?.message || String(e)))
-  }
-}
+import { extrairProdutosDoPDF } from '@/lib/pdf-parser'
 
 export async function POST(req: NextRequest) {
   try {
@@ -181,19 +45,15 @@ export async function POST(req: NextRequest) {
       criadoEm: new Date().toISOString(),
     })
 
-    // Extrai produtos do PDF
-    let produtosExtraidos: ProdutoExtraido[] = []
+    // ── Extrai produtos do PDF usando parser inteligente ─────────────────
+    let produtosExtraidos = 0
     let logExtracao = 'PDF recebido. '
     try {
-      const texto = await extrairTextoPDF(buffer)
-      logExtracao += `Texto extraído: ${texto.length} caracteres. `
+      const { produtos } = await extrairProdutosDoPDF(buffer)
+      logExtracao += `Parser identificou ${produtos.length} produto(s). `
 
-      produtosExtraidos = extrairProdutosDoTexto(texto)
-      logExtracao += `${produtosExtraidos.length} produtos encontrados.`
-
-      // Salva os produtos extraídos no Firestore
       let salvos = 0
-      for (const p of produtosExtraidos) {
+      for (const p of produtos) {
         try {
           await db.produto.create({
             encarteId: encarte.id,
@@ -206,11 +66,12 @@ export async function POST(req: NextRequest) {
             criadoEm: new Date().toISOString(),
           })
           salvos++
-        } catch (e) {
+        } catch {
           // ignora erro de produto individual
         }
       }
-      logExtracao += ` ${salvos} produtos salvos.`
+      produtosExtraidos = salvos
+      logExtracao += `${salvos} produto(s) salvo(s) no encarte.`
 
       await (db.encarte as any).update?.(encarte.id, {
         statusExtracao: 'concluido',
@@ -229,7 +90,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       encarte,
-      produtosExtraidos: produtosExtraidos.length,
+      produtosExtraidos,
       log: logExtracao,
     })
   } catch (e: any) {

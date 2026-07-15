@@ -13,6 +13,9 @@ import {
   TrendingUp,
   TrendingDown,
   MapPin,
+  Headphones,
+  Send,
+  CheckCircle,
   BarChart3,
   Loader2,
   UserCircle,
@@ -29,6 +32,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { api, useSession } from './AppShell'
 import { toast } from 'sonner'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   BarChart,
   Bar,
@@ -718,6 +728,35 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
   const [dataFim, setDataFim] = useState('')
   const [uploading, setUploading] = useState(false)
 
+  // Suporte state
+  const [suporteOpen, setSuporteOpen] = useState(false)
+  const [suporteCat, setSuporteCat] = useState('')
+  const [suporteAssunto, setSuporteAssunto] = useState('')
+  const [suporteMsg, setSuporteMsg] = useState('')
+  const [suporteSending, setSuporteSending] = useState(false)
+  const [suporteEnviado, setSuporteEnviado] = useState(false)
+
+  const handleSuporte = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSuporteSending(true)
+    try {
+      await api('/api/contato', {
+        method: 'POST',
+        body: JSON.stringify({ categoria: suporteCat, assunto: suporteAssunto.trim(), mensagem: suporteMsg.trim() }),
+      })
+      toast.success('Mensagem enviada com sucesso!')
+      setSuporteEnviado(true)
+      setSuporteAssunto('')
+      setSuporteMsg('')
+      setSuporteCat('')
+      setTimeout(() => setSuporteEnviado(false), 5000)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao enviar')
+    } finally {
+      setSuporteSending(false)
+    }
+  }
+
   // Fetch BI
   useEffect(() => {
     api<BIData>('/api/mercado/bi')
@@ -1199,6 +1238,52 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
             </div>
           )}
         </CardContent>
+      </Card>
+
+      {/* Suporte ── */}
+      <Card className="border-blue-100">
+        <CardHeader className="pb-3 pt-4 px-4 cursor-pointer select-none" onClick={() => setSuporteOpen(!suporteOpen)}>
+          <CardTitle className="text-sm font-semibold flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Headphones className="h-4 w-4 text-blue-600" />
+              Suporte
+            </span>
+            {suporteOpen ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+          </CardTitle>
+        </CardHeader>
+        <AnimatePresence>
+          {suporteOpen && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <CardContent className="px-4 pb-4 space-y-3 border-t border-blue-50">
+                {suporteEnviado ? (
+                  <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                    <p className="text-sm text-green-800">Mensagem enviada! Responderemos em breve.</p>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSuporte} className="space-y-3">
+                    <p className="text-xs text-blue-700/70">Sua mensagem será identificada com o mercado <strong>{conta.nome}</strong>.</p>
+                    <Select value={suporteCat} onValueChange={setSuporteCat}>
+                      <SelectTrigger className="h-10"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Sugestão">Sugestão</SelectItem>
+                        <SelectItem value="Problemas Técnicos">Problemas Técnicos</SelectItem>
+                        <SelectItem value="Encarte com falha no upload">Encarte com falha no upload</SelectItem>
+                        <SelectItem value="Outros">Outros</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input placeholder="Assunto" value={suporteAssunto} onChange={e => setSuporteAssunto(e.target.value)} className="h-10" />
+                    <textarea placeholder="Descreva sua solicitação..." value={suporteMsg} onChange={e => setSuporteMsg(e.target.value)} rows={4} className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm" disabled={suporteSending || !suporteCat || !suporteAssunto.trim() || !suporteMsg.trim()}>
+                      {suporteSending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                      Enviar Mensagem
+                    </Button>
+                  </form>
+                )}
+              </CardContent>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </Card>
     </div>
   )
