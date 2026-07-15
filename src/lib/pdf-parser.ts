@@ -1,8 +1,12 @@
 /**
  * EncarteBrasil PDF Parser
  *
- * Extrai APENAS dados de produtos (nome, marca, preço, unidade) de encartes PDF
- * de supermercados. Filtra frases de marketing, cabeçalhos, textos legais, etc.
+ * Extrai dados de produtos (nome, marca, preço, unidade) de encartes PDF
+ * de supermercados brasileiros.
+ *
+ * IMPORTANTE: encartes BR são quase 100% MAIÚSCULOS. Os filtros de ruído
+ * devem ser cirúrgicos — só eliminar o que é claramente marketing/legal,
+ * sem bloquear nomes de produtos em caixa alta.
  */
 
 import { PDFParse } from 'pdf-parse'
@@ -17,25 +21,20 @@ export interface ProdutoExtraido {
   unidade: string | null
 }
 
-// ── Frases de marketing / ruído a ignorar ────────────────────────────────────
+// ── Frases de marketing COMPLETAS a ignorar (só matches exatos ou quase) ────
 
 const MARKETING_PHRASES = new Set([
   'OFERTA', 'SUPER OFERTA', 'MEGA OFERTA', 'OFERTA ESPECIAL',
   'PREÇO IMBATÍVEL', 'APROVEITE', 'IMPERDÍVEL',
   'MELHOR PREÇO', 'O MENOR PREÇO', 'MENOR PREÇO',
   'LEVE MAIS POR MENOS', 'ECONOMIA GARANTIDA', 'ECONOMIA TOTAL',
-  'O QUILO SAI POR APENAS', 'POR APENAS',
   'ESPECIAL DE HOJE', 'SÓ HOJE', 'ÚLTIMAS UNIDADES',
   'PREÇO ÚNICO', 'PREÇO ESPECIAL', 'PREÇO BAIXO',
   'FIRE SALE', 'LIQUIDAÇÃO', 'PROMOÇÃO', 'PROMO',
-  'QUEIMA DE ESTOQUE', 'DESCONTO', 'IMPERDÍVEL',
+  'QUEIMA DE ESTOQUE', 'DESCONTO',
   'COMPRE E GANHE', 'LEVE 2 PAGUE 1', 'LEVE 3 PAGUE 2',
   'GARANTIA DE FRESQUURA', 'SEMPRE FRESCO',
   'QUALIDADE GARANTIDA', 'PRODUTO SELECIONADO',
-  'FRESCURINHO', 'FRESCÃO', 'DA HORTA',
-  // Additional marketing fragments
-  'DE POR', 'DE R$', 'A PARTIR DE',
-  'APENAS R$', 'POR R$', 'POR UNITÁRIO',
 ])
 
 // Padrões de texto legal / rodapé
@@ -56,6 +55,9 @@ const UNIT_ONLY = /^(un\.?|kg|g|ml|l|cx|pct|dz)$/i
 
 // Padrão para preços: R$ XX,XX seguido opcionalmente de unidade
 const PRICE_REGEX = /^R\$\s*(\d+[.,]\d{2})\s*(un\.?|kg|g|ml|l|cx|pct|pacote|dz|par)?/i
+
+// Padrão para detectar preço em qualquer posição da linha
+const PRICE_ANYWHERE = /R\$\s*\d+[.,]\d{2}/i
 
 // Padrão para cabeçalhos de seção do encarte
 const SECTION_HEADERS = [
@@ -78,37 +80,52 @@ const SECTION_HEADERS = [
 ]
 
 /**
- * Verifica se uma linha é ruído (marketing, legal, cabeçalho, etc.)
+ * Verifica se uma linha é ruído puro (marketing exato, legal, vazio, etc.)
+ * REGRA: ser permissivo. Só bloqueia o que é CLARAMENTE não-produto.
  */
 function isNoise(line: string): boolean {
   const trimmed = line.trim()
 
+  // Vazio
   if (!trimmed) return true
-  if (trimmed.length < 5 && !trimmed.includes('R$')) return true
+
+  // Muito curto e sem preço
+  if (trimmed.length < 4 && !PRICE_ANYWHERE.test(trimmed)) return true
+
+  // Apenas dígitos
   if (/^\d+$/.test(trimmed)) return true
-  if (/^[^\w]+$/.test(trimmed)) return true
+
+  // Apenas símbolos/pontuação (sem letras)
+  if (/^[^\wáéíóúãõâêîôûçÁÉÍÓÚÃÕÂÊÎÔÛÇ]+$/i.test(trimmed)) return true
+
+  // Apenas "un." ou unidade solta
   if (UNIT_ONLY.test(trimmed)) return true
+
+  // Page markers
   if (/--\s*\d+\s+of\s+\d+\s*--/.test(trimmed)) return true
 
+  // Texto legal
   for (const pattern of LEGAL_PATTERNS) {
     if (pattern.test(trimmed)) return true
   }
 
+  // Frases de marketing exatas
   const upper = trimmed.toUpperCase().trim()
   if (MARKETING_PHRASES.has(upper)) return true
-  if (/^DE\s+R\$\s*\d+[.,]\d{2}\s+POR\s+APENAS/i.test(trimmed)) return true
-  if (/por\s+apenas/i.test(trimmed)) return true
-  if (PRICE_REGEX.test(trimmed) && trimmed.length < 20) return true
 
+  // Cabeçalhos de seção (ex: "MERCEARIA", "AÇOUGUE") — só se for curto e sem preço
   for (const header of SECTION_HEADERS) {
-    if (header.test(trimmed) && trimmed.length < 40) return true
+    if (header.test(trimmed) && trimmed.length < 30 && !PRICE_ANYWHERE.test(trimmed)) return true
   }
 
-  if (/^[A-ZÁÉÍÓÚÃÕÂÊÎÔÛÇ\s]{10,}$/.test(trimmed)) return true
-  if (/^[\u{1F525}\u{1F4A5}\u{2B50}\u{1F4B0}\s]+$/u.test(trimmed)) return true
-  if (/ENCARTE\s+(ESPECIAL|DA\s+SEMANA|DA\s+QUINZENA)/i.test(trimmed)) return true
-  if (/^MERCADO\s+/i.test(trimmed) && trimmed.length < 30 && !trimmed.includes('R$')) return true
-  if (/^SUPERMERCADO\s+/i.test(trimmed) && trimmed.length < 30 && !trimmed.includes('R$')) return true
+  // Emojis puros
+  if (/^[\u{1F300}-\u{1FAFF}\s]+$/u.test(trimmed)) return true
+
+  // "ENCARTE ESPECIAL DA SEMANA" etc.
+  if (/^ENCARTE\s+(ESPECIAL|DA\s+SEMANA|DA\s+QUINZENA)/i.test(trimmed)) return true
+
+  // Linha que é SÓ o nome do mercado (curto, sem preço)
+  if (/^(SUPERMERCADO|MERCADO|ATACADO)\s+/i.test(trimmed) && trimmed.length < 35 && !PRICE_ANYWHERE.test(trimmed)) return true
 
   return false
 }
@@ -185,47 +202,35 @@ function normalizeForDedup(text: string): string {
 }
 
 /**
- * Verifica se uma linha parece ser um nome de produto para a abordagem "name-first".
- * Mais restritivo que a função genérica isProductName.
+ * Verifica se uma linha pode ser um nome de produto.
+ * PERMISSIVO: aceita maiúsculas (encartes BR são assim).
+ * Só rejeita o que é claramente preço, número solto, ou ruído conhecido.
  */
 function isValidProductLine(line: string): boolean {
   const trimmed = line.trim()
   if (!trimmed) return false
 
-  // Menos de 4 caracteres — não é nome de produto
+  // Muito curto
   if (trimmed.length < 4) return false
 
   // Apenas dígitos
   if (/^\d+$/.test(trimmed)) return false
 
-  // Apenas "un." ou "UN"
+  // Apenas "un." ou unidade solta
   if (/^un\.?$/i.test(trimmed)) return false
 
-  // Contém "DE POR APENAS"
-  if (/de\s+por\s+apenas/i.test(trimmed)) return false
+  // Começa com R$ → é linha de preço, não nome
+  if (/^R\$/i.test(trimmed)) return false
 
   // Apenas preço (R$ XX,XX) com nada mais
   if (/^R\$\s*\d+[.,]\d{2}\s*$/i.test(trimmed)) return false
 
-  // Começa com R$ (é linha de preço)
-  if (/^R\$/i.test(trimmed)) return false
-
-  // Ruído geral
+  // Ruído conhecido
   if (isNoise(trimmed)) return false
 
-  // Reject lines that are entirely UPPERCASE and shorter than 40 chars (pure marketing headers)
-  if (trimmed.length < 40 && !/[a-záéíóúãõâêîôûç]/.test(trimmed) && /[A-ZÁÉÍÓÚÃÕÂÊÎÔÛÇ]/.test(trimmed)) return false
-
-  // Reject lines where more than 60% of characters are uppercase
-  const allLetters = trimmed.replace(/[^a-zA-ZÁÉÍÓÚÃÕÂÊÎÔÛÇàáéíóúãõâêîôûç]/g, '')
-  if (allLetters.length > 0) {
-    const upperCount = allLetters.replace(/[^A-ZÁÉÍÓÚÃÕÂÊÎÔÛÇ]/g, '').length
-    if (upperCount / allLetters.length > 0.6) return false
-  }
-
-  // Precisa ter pelo menos 3 caracteres de letra
+  // Precisa ter pelo menos 2 caracteres de letra
   const letters = trimmed.replace(/[^a-zA-ZÁÉÍÓÚÃÕÂÊÎÔÛÇàáéíóúãõâêîôûç]/g, '')
-  if (letters.length < 3) return false
+  if (letters.length < 2) return false
 
   return true
 }
@@ -285,7 +290,7 @@ export function parseProdutosDoTexto(text: string): ProdutoExtraido[] {
     let nomeLimpo = line.replace(/\s+[-–]\s+.*$/, '').trim()
     if (nomeLimpo.length < 6) nomeLimpo = line.trim()
 
-    // Deduplicação rigorosa: normaliza nome+preço e mantém só a primeira ocorrência
+    // Deduplicação: normaliza nome+preço e mantém só a primeira ocorrência
     const dedupKey = `${normalizeForDedup(nomeLimpo)}|${precoStr}`
     if (seenKeys.has(dedupKey)) continue
     seenKeys.add(dedupKey)
@@ -301,8 +306,7 @@ export function parseProdutosDoTexto(text: string): ProdutoExtraido[] {
     if (priceLineIndex >= 0) usedIndices.add(priceLineIndex)
   }
 
-  // Post-processing dedup: if two products have the same normalized name (ignoring price),
-  // keep only the one with the longest name
+  // Post-processing dedup: same normalized name → keep longest
   const dedupMap = new Map<string, ProdutoExtraido>()
   for (const p of produtos) {
     const key = normalizeForDedup(p.nome)
