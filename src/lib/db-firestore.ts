@@ -62,11 +62,11 @@ export const db = {
   // ── Mercado ─────────────────────────────────────────────────────────────
   mercado: {
     findMany: async (opts?: { orderBy?: string; include?: Record<string, any> }) => {
-      const snap = await getDocs(
-        query(collection(firestore as any, COLS.mercados), orderBy('criadoEm', 'desc'))
-      )
+      // Sem orderBy para evitar indice composto — ordena em memoria
+      const snap = await getDocs(collection(firestore as any, COLS.mercados))
+      const docs = snap.docs
       const mercados: any[] = []
-      for (const d of snap.docs) {
+      for (const d of docs) {
         const data = d.data()
         const totalProdutos = await countCollection(COLS.produtos, where('mercadoId', '==', d.id))
         const totalEncartes = await countCollection(COLS.encartes, where('mercadoId', '==', d.id))
@@ -77,7 +77,7 @@ export const db = {
           totalEncartes,
         })
       }
-      return mercados
+      return mercados.sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''))
     },
 
     findUnique: async (w: { where: { id?: string; cnpj?: string; emailLogin?: string }; select?: Record<string, boolean> }) => {
@@ -116,18 +116,25 @@ export const db = {
       const d = await getDoc(doc(firestore as any, COLS.mercados, id))
       if (!d.exists()) return null
 
+      // Sem orderBy para evitar necessidade de indice composto — ordena em memoria
       const encartesSnap = await getDocs(
-        query(collection(firestore as any, COLS.encartes), where('mercadoId', '==', id), orderBy('criadoEm', 'desc'))
+        query(collection(firestore as any, COLS.encartes), where('mercadoId', '==', id))
       )
-      const encartes = await Promise.all(encartesSnap.docs.map(async (ed) => {
+      const encartes = (await Promise.all(encartesSnap.docs.map(async (ed) => {
         const prodCount = await countCollection(COLS.produtos, where('encarteId', '==', ed.id))
-        return { id: ed.id, ...ed.data(), _count: { produtos: prodCount } }
-      }))
+        const produtosSnap = await getDocs(
+          query(collection(firestore as any, COLS.produtos), where('encarteId', '==', ed.id), where('mercadoId', '==', id))
+        )
+        const produtos = produtosSnap.docs.map((pd) => ({ id: pd.id, ...pd.data() }))
+        return { id: ed.id, ...ed.data(), _count: { produtos: prodCount }, produtos }
+      }))).sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''))
 
+      // Sem orderBy — filtra e ordena em memoria
       const prodsSnap = await getDocs(
-        query(collection(firestore as any, COLS.produtos), where('mercadoId', '==', id), orderBy('criadoEm', 'desc'))
+        query(collection(firestore as any, COLS.produtos), where('mercadoId', '==', id))
       )
       const produtos = prodsSnap.docs.map((pd) => ({ id: pd.id, ...pd.data() }))
+        .sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''))
 
       return { id: d.id, ...d.data(), encartes, produtos }
     },
@@ -172,19 +179,19 @@ export const db = {
   // ── Produto ─────────────────────────────────────────────────────────────
   produto: {
     findMany: async (opts: { where: { encarteId: string; mercadoId: string }; orderBy?: Record<string, string> }) => {
+      // Sem orderBy composto — filtra por encarteId e ordena em memoria
       const snap = await getDocs(
-        query(
-          collection(firestore as any, COLS.produtos),
-          where('encarteId', '==', opts.where.encarteId),
-          where('mercadoId', '==', opts.where.mercadoId),
-          orderBy('criadoEm', 'desc')
-        )
+        query(collection(firestore as any, COLS.produtos), where('encarteId', '==', opts.where.encarteId))
       )
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      return snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((p: any) => p.mercadoId === opts.where.mercadoId)
+        .sort((a: any, b: any) => (b.criadoEm || '').localeCompare(a.criadoEm || ''))
     },
 
     findAll: async () => {
-      const snap = await getDocs(query(collection(firestore as any, COLS.produtos), orderBy('criadoEm', 'desc')))
+      // Sem orderBy — ordena em memoria
+      const snap = await getDocs(collection(firestore as any, COLS.produtos))
       const results: any[] = []
       for (const d of snap.docs) {
         const data = d.data()
@@ -194,7 +201,7 @@ export const db = {
           : { id: data.mercadoId, nome: 'Desconhecido', cidade: '', estado: '' }
         results.push({ id: d.id, ...data, mercado })
       }
-      return results
+      return results.sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''))
     },
 
     findUnique: async (id: string) => {
@@ -232,9 +239,10 @@ export const db = {
 
     findByMarket: async (mercadoId: string) => {
       const snap = await getDocs(
-        query(collection(firestore as any, COLS.cliques), where('mercadoId', '==', mercadoId), orderBy('criadoEm', 'desc'))
+        query(collection(firestore as any, COLS.cliques), where('mercadoId', '==', mercadoId))
       )
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a: any, b: any) => (b.criadoEm || '').localeCompare(a.criadoEm || ''))
     },
 
     groupByProduto: async (mercadoId: string) => {
@@ -258,13 +266,10 @@ export const db = {
   listaCompras: {
     findMany: async (opts: { where: { sessionId: string }; orderBy?: Record<string, string> }) => {
       const snap = await getDocs(
-        query(
-          collection(firestore as any, COLS.listas),
-          where('sessionId', '==', opts.where.sessionId),
-          orderBy('criadoEm', 'desc')
-        )
+        query(collection(firestore as any, COLS.listas), where('sessionId', '==', opts.where.sessionId))
       )
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a: any, b: any) => (b.criadoEm || '').localeCompare(a.criadoEm || ''))
     },
 
     findUnique: async (id: string) => {
@@ -334,6 +339,7 @@ export const db = {
     findMany: async () => {
       const snap = await getDocs(collection(firestore as any, COLS.usuarios))
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a: any, b: any) => (b.criadoEm || '').localeCompare(a.criadoEm || ''))
     },
   },
 }
