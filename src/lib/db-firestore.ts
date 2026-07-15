@@ -121,12 +121,14 @@ export const db = {
         query(collection(firestore as any, COLS.encartes), where('mercadoId', '==', id))
       )
       const encartes = (await Promise.all(encartesSnap.docs.map(async (ed) => {
-        const prodCount = await countCollection(COLS.produtos, where('encarteId', '==', ed.id))
+        // Filtra só por encarteId (sem where duplo) e filtra mercadoId em memória
         const produtosSnap = await getDocs(
-          query(collection(firestore as any, COLS.produtos), where('encarteId', '==', ed.id), where('mercadoId', '==', id))
+          query(collection(firestore as any, COLS.produtos), where('encarteId', '==', ed.id))
         )
-        const produtos = produtosSnap.docs.map((pd) => ({ id: pd.id, ...pd.data() }))
-        return { id: ed.id, ...ed.data(), _count: { produtos: prodCount }, produtos }
+        const produtos = produtosSnap.docs
+          .map((pd) => ({ id: pd.id, ...pd.data() }))
+          .filter((p: any) => p.mercadoId === id)
+        return { id: ed.id, ...ed.data(), _count: { produtos: produtos.length }, produtos }
       }))).sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''))
 
       // Sem orderBy — filtra e ordena em memoria
