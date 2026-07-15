@@ -368,13 +368,31 @@ export async function extrairProdutosDoPDF(pdfBuffer: Buffer | Uint8Array): Prom
   totalPaginas: number
 }> {
   const uint8 = pdfBuffer instanceof Buffer ? new Uint8Array(pdfBuffer) : pdfBuffer
-  const parser = new PDFParse(uint8)
-  const result = await parser.getText()
+  let textoBruto = ''
+  let totalPaginas = 0
 
-  const textoBruto = result.text || ''
-  const totalPaginas = result.pages?.length || 0
+  try {
+    const parser = new PDFParse(uint8)
+    const result = await parser.getText()
+    textoBruto = result.text || ''
+    totalPaginas = result.pages?.length || 0
+    console.log(`[pdf-parser] texto extraído: ${textoBruto.length} chars, ${totalPaginas} páginas`)
+  } catch (e: any) {
+    console.error('[pdf-parser] erro ao extrair texto do PDF:', e?.message || e)
+    // Se getText falhou, tenta abordagem alternativa com o pdf original (v1)
+    try {
+      const pdfParse = require('pdf-parse')
+      const result = await (typeof pdfParse === 'function' ? pdfParse : pdfParse.default)(pdfBuffer)
+      textoBruto = result.text || ''
+      totalPaginas = result.numpages || 0
+      console.log(`[pdf-parser] fallback v1: ${textoBruto.length} chars, ${totalPaginas} páginas`)
+    } catch (e2: any) {
+      console.error('[pdf-parser] fallback também falhou:', e2?.message || e2)
+    }
+  }
 
   const produtos = parseProdutosDoTexto(textoBruto)
+  console.log(`[pdf-parser] ${produtos.length} produto(s) extraído(s) de ${textoBruto.length} chars`)
 
   return { produtos, textoBruto, totalPaginas }
 }

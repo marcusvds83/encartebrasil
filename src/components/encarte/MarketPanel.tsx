@@ -870,7 +870,8 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
         setReviewProdutos(produtos)
         setReviewOpen(true)
       } else {
-        toast.success('Encarte enviado! Nenhum produto foi extraído automaticamente (PDF pode ser imagem ou sem preços visíveis).', { duration: 6000 })
+        const logMsg = result.log || ''
+        toast.error(`Encarte enviado mas nenhum produto extraído. ${logMsg}`, { duration: 8000 })
       }
       setTitulo('')
       setDataInicio('')

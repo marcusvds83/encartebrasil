@@ -49,15 +49,23 @@ export async function POST(req: NextRequest) {
     let produtosExtraidos: Array<{ nome: string; marca: string | null; preco: string; unidade: string | null }> = []
     let logExtracao = 'PDF recebido. '
     try {
-      const { produtos } = await extrairProdutosDoPDF(buffer)
+      const { produtos, textoBruto, totalPaginas } = await extrairProdutosDoPDF(buffer)
+      console.log(`[encarte upload] parser: ${produtos.length} produtos, texto=${textoBruto.length}chars, paginas=${totalPaginas}`)
       produtosExtraidos = produtos.map(p => ({
         nome: p.nome,
         marca: p.marca,
         preco: p.preco,
         unidade: p.unidade,
       }))
-      logExtracao += `Parser identificou ${produtos.length} produto(s). Aguardando revisão antes de publicar.`
+      if (produtos.length > 0) {
+        logExtracao += `Parser identificou ${produtos.length} produto(s). Revise antes de publicar.`
+      } else if (textoBruto.length === 0) {
+        logExtracao += `Nenhum texto foi extraído do PDF — provavelmente os produtos são imagens (Canva/Designer). O PDF precisa ter texto selecionável.`
+      } else {
+        logExtracao += `Texto extraído (${textoBruto.length} caracteres) mas nenhum produto com preço foi encontrado. Verifique se os preços estão no formato R$ XX,XX.`
+      }
     } catch (e: any) {
+      console.error('[encarte upload] erro parser:', e)
       logExtracao += ` Erro na extração: ${e?.message || String(e)}`
     }
 
