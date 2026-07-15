@@ -7,7 +7,6 @@ import path from 'path'
 /**
  * Extrai produtos de um texto de encarte (PDF).
  * Procura por linhas com padrão: NOME PRODUTO ... R$ XX,XX
- * Também tenta capturar marca e unidade quando possível.
  */
 interface ProdutoExtraido {
   nome: string
@@ -20,66 +19,126 @@ function extrairProdutosDoTexto(texto: string): ProdutoExtraido[] {
   const produtos: ProdutoExtraido[] = []
   const vistos = new Set<string>()
 
-  // Padrão 1: Linhas com preço no formato R$ XX,XX ou XX,XX no final
-  // Ex: "Coca-Cola 2L R$ 8,99" ou "Arroz 5kg Tio João 12,90"
+  // Padrão 1: Linhas com preço no formato R$ XX,XX ou XX,XX
   const linhas = texto.split(/\r?\n/)
 
-  // Regex para preço: R$ (opcional) + número + , + 2 dígitos
   const precoRegex = /R\$\s*(\d{1,4}(?:\.\d{3})*,\d{2})/g
-  // Regex para unidade: kg, g, L, ml, un, pct, cx, etc.
-  const unidadeRegex = /\b(\d+(?:,\d+)?)\s*(kg|g|ml|l|litro|litros|un|unidade|pct|pack|cx|caixa|lata|garrafa|frasco|saco|pacote|bandeja|dobro|grama|gramas)\b/i
+  const unidadeRegex = /\b(\d+(?:,\d+)?)\s*(kg|g|ml|l|litro|litros|un|unidade|pct|pack|cx|caixa|lata|garrafa|frasco|saco|pacote|bandeja|grama|gramas)\b/i
 
   for (const linhaOriginal of linhas) {
     const linha = linhaOriginal.trim()
     if (linha.length < 3 || linha.length > 200) continue
 
-    // Tenta encontrar preço
     const precos = [...linha.matchAll(precoRegex)]
     if (precos.length === 0) continue
 
     const preco = `R$ ${precos[0][1]}`
-    // Remove o preço da linha para pegar o nome
     let nome = linha.replace(precoRegex, '').replace(/\s+/g, ' ').trim()
-
-    // Remove caracteres especiais e números isolados no início
     nome = nome.replace(/^[\d\.\-\*]+\s*/, '').trim()
 
-    // Tenta extrair unidade
     const unidadeMatch = nome.match(unidadeRegex)
     let unidade: string | null = null
-    let marca: string | null = null
     if (unidadeMatch) {
       unidade = `${unidadeMatch[1]}${unidadeMatch[2]}`
     }
 
-    // Se nome tem 2+ palavras, a primeira geralmente é o produto e a segunda a marca
-    const palavras = nome.split(/\s+/)
-    if (palavras.length >= 2) {
-      // Heurística simples: se tem "de" ou preposição, marca está depois
-      // Caso contrário, mantém nome completo
-      if (palavras.length >= 3 && palavras[1].length <= 3) {
-        // Pode ser "Arroz Tio João" -> marca = "Tio João"
-        // Não confiável, então mantém tudo como nome
-      }
-    }
-
-    // Filtra nomes muito curtos
     if (nome.length < 3) continue
 
-    // Filtra duplicados (mesmo nome + preço)
     const chave = `${nome}|${preco}`
     if (vistos.has(chave)) continue
     vistos.add(chave)
 
     produtos.push({
-      nome: nome.substring(0, 100), // limita tamanho
-      marca,
+      nome: nome.substring(0, 100),
+      marca: null,
       preco,
       unidade,
     })
   }
 
+  // Padrão 2: texto em uma linha só (pdfjs junta tudo)
+  // Procura por "Nome Produto R$ XX,XX" em sequência
+  if (produtos.length === 0) {
+    const regexInline = /([A-ZÁÉÍÓÚÂÊÔÃÕÇa-záéíóúâêôãõç][A-ZÁÉÍÓÚÂÊÔÃÕÇa-záéíóúâêôãõç\s\d\.,-]{2,80}?)\s+R\$\s*(\d{1,4}(?:\.\d{3})*,\d{2})/g
+    let match
+    while ((match = regexInline.exec(texto)) !== null) {
+      const nome = match[1].trim().replace(/^[\d\.\-\*]+\s*/, '').trim()
+      const preco = `R$ ${match[2]}`
+      if (nome.length < 3) continue
+      const chave = `${nome}|${preco}`
+      if (vistos.has(chave)) continue
+      vistos.add(chave)
+
+      const unidadeMatch = nome.match(unidadeRegex)
+      produtos.push({
+        nome: nome.substring(0, 100),
+        marca: null,
+        preco,
+        unidade: unidadeMatch ? `${unidadeMatch[1]}${unidadeMatch[2]}` : null,
+      })
+    }
+  }
+
   return produtos
+}
+
+/** Extrai texto de um PDF usando pdfjs-dist (worker desabilitado) */
+async function extrairTextoPDF(buffer: Buffer): Promise<string> {
+  let workerSrc: string | null = null
+  try {
+    const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js')
+    const path = require('path')
+    const fs = require('fs')
+
+    // Tenta encontrar o worker no node_modules
+    const workerPaths = [
+      path.join(process.cwd(), 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.js'),
+      path.join(__dirname, '..', '..', '..', '..', 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.js'),
+      path.join(__dirname, '..', '..', '..', '..', '..', '..', 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.js'),
+    ]
+    for (const p of workerPaths) {
+      if (fs.existsSync(p)) {
+        workerSrc = p
+        break
+      }
+    }
+
+    // Se encontrou o worker, configura; senão, tenta sem worker
+    if (workerSrc && pdfjsLib.GlobalWorkerOptions) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
+    }
+
+    const uint8 = new Uint8Array(buffer)
+    const doc = await pdfjsLib.getDocument({
+      data: uint8,
+      disableFontFace: true,
+      useSystemFonts: false,
+      isEvalSupported: false,
+      // Passa o worker port diretamente para evitar problema de path
+      worker: workerSrc ? new pdfjsLib.PDFWorker() : undefined,
+    }).promise
+
+    let allText = ''
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i)
+      const content = await page.getTextContent()
+      let lastY: number | null = null
+      const parts: string[] = []
+      for (const item of content.items as any[]) {
+        const y = item.transform?.[5]
+        if (lastY !== null && y !== undefined && Math.abs(y - lastY) > 5) {
+          parts.push('\n')
+        }
+        parts.push(item.str)
+        if (y !== undefined) lastY = y
+      }
+      allText += parts.join(' ') + '\n'
+    }
+    return allText
+  } catch (e: any) {
+    console.error('[pdf] erro ao extrair texto:', e?.message || String(e))
+    throw new Error('Falha ao extrair texto do PDF: ' + (e?.message || String(e)))
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -111,14 +170,11 @@ export async function POST(req: NextRequest) {
       criadoEm: new Date().toISOString(),
     })
 
-    // Tenta extrair produtos do PDF
+    // Extrai produtos do PDF
     let produtosExtraidos: ProdutoExtraido[] = []
     let logExtracao = 'PDF recebido. '
     try {
-      // pdf-parse é importado dinamicamente para não quebrar build se não instalado
-      const pdfParse = (await import('pdf-parse')).default
-      const pdfData = await pdfParse(buffer)
-      const texto = pdfData.text || ''
+      const texto = await extrairTextoPDF(buffer)
       logExtracao += `Texto extraído: ${texto.length} caracteres. `
 
       produtosExtraidos = extrairProdutosDoTexto(texto)
@@ -145,19 +201,17 @@ export async function POST(req: NextRequest) {
       }
       logExtracao += ` ${salvos} produtos salvos.`
 
-      // Atualiza status do encarte
-      await db.encarte.update?.(encarte.id, {
+      await (db.encarte as any).update?.(encarte.id, {
         statusExtracao: 'concluido',
         extracaoLog: logExtracao,
-      } as any)
+      })
     } catch (e: any) {
       logExtracao += ` Erro na extração: ${e?.message || String(e)}`
-      // Tenta atualizar mesmo com erro
       try {
-        await db.encarte.update?.(encarte.id, {
+        await (db.encarte as any).update?.(encarte.id, {
           statusExtracao: 'erro',
           extracaoLog: logExtracao,
-        } as any)
+        })
       } catch {}
     }
 
