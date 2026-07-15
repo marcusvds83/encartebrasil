@@ -291,23 +291,33 @@ export default function MyListView({ sessionId }: MyListViewProps) {
         )}
       </div>
 
-      {/* Botão: Rota dos mercados mais próximos */}
-      {Object.keys(grouped).length > 0 && (
-        <a
-          href={`https://www.google.com/maps/search/${encodeURIComponent(
-            Object.entries(grouped).map(([nome, g]) => {
-              const cidade = [...g.cidades][0] || ''
-              return cidade ? `${nome} ${cidade}` : nome
-            }).join(' ')
-          )}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-red-600 to-orange-500 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-sm hover:shadow-md transition-shadow"
-        >
-          <MapPin className="h-4 w-4" />
-          Ver rota dos mercados mais próximos
-        </a>
-      )}
+      {/* Botão: Rota dos mercados no Google Maps */}
+      {Object.keys(grouped).length > 0 && (() => {
+        // Monta waypoints com "nome do mercado, cidade" para Google Maps Directions
+        const waypoints = Object.entries(grouped).map(([nome, g]) => {
+          const cidade = [...g.cidades][0] || ''
+          // Remove a barra e estado do formato "Cidade/UF" para ficar mais limpo
+          const cidadeLimpa = cidade.replace(/\/[A-Z]{2}$/, '')
+          return cidadeLimpa ? `${nome}, ${cidadeLimpa}` : nome
+        })
+
+        // Google Maps Directions com waypoints (usuario define origem no Maps)
+        const mapsUrl = waypoints.length === 1
+          ? `https://www.google.com/maps/search/${encodeURIComponent(waypoints[0])}`
+          : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(waypoints[waypoints.length - 1])}&waypoints=${encodeURIComponent(waypoints.slice(0, -1).join('|'))}&travelmode=driving`
+
+        return (
+          <a
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-red-600 to-orange-500 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+          >
+            <MapPin className="h-4 w-4" />
+            Ver rota dos mercados ({Object.keys(grouped).length} {Object.keys(grouped).length === 1 ? 'mercado' : 'mercados'})
+          </a>
+        )
+      })()}
 
       {/* Grouped items */}
       <div className="space-y-4 pb-20">
@@ -329,6 +339,19 @@ export default function MyListView({ sessionId }: MyListViewProps) {
               <Badge variant="secondary" className="text-[10px] px-1.5">
                 {group.items.length}
               </Badge>
+              {/* Link individual para este mercado no Maps */}
+              {[...group.cidades][0] && (
+                <a
+                  href={`https://www.google.com/maps/search/${encodeURIComponent(
+                    `${market}, ${[...group.cidades][0].replace(/\/[A-Z]{2}$/, '')}`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto text-[10px] text-orange-500 hover:text-orange-700 underline underline-offset-2"
+                >
+                  Maps
+                </a>
+              )}
             </div>
 
             <Card className="border-gray-100 divide-y divide-gray-50">

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { UserCircle, Save, Loader2, LogOut, Headphones, Send, CheckCircle } from 'lucide-react'
+import { UserCircle, Save, Loader2, LogOut, Headphones, Send, CheckCircle, Clock, X, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,6 +27,109 @@ interface PerfilData {
 
 interface UserProfileProps {
   onLogout: () => void
+}
+
+// ── Search History (compartilhado com HomeView) ────────────────────────
+const SEARCH_HISTORY_KEY = 'eb_search_history'
+const SEARCH_MAX_AGE = 30 * 24 * 60 * 60 * 1000
+const SEARCH_MAX_ITEMS = 20
+
+interface SearchEntry { text: string; ts: number }
+
+function loadSearchHistory(): SearchEntry[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(SEARCH_HISTORY_KEY)
+    if (!raw) return []
+    const entries: SearchEntry[] = JSON.parse(raw)
+    const now = Date.now()
+    const valid = entries.filter((e) => now - e.ts < SEARCH_MAX_AGE)
+    const seen = new Set<string>()
+    const deduped: SearchEntry[] = []
+    for (const e of valid.sort((a, b) => b.ts - a.ts)) {
+      const key = e.text.toLowerCase().trim()
+      if (key && !seen.has(key)) {
+        seen.add(key)
+        deduped.push(e)
+      }
+    }
+    return deduped.slice(0, SEARCH_MAX_ITEMS)
+  } catch { return [] }
+}
+
+function removeSearchTerm(text: string) {
+  if (typeof window === 'undefined') return
+  try {
+    const entries = loadSearchHistory().filter((e) => e.text !== text)
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(entries))
+  } catch { /* ignore */ }
+}
+
+function SearchHistoryList() {
+  const [history, setHistory] = useState<SearchEntry[]>([])
+  useEffect(() => { setHistory(loadSearchHistory()) }, [])
+
+  const handleRemove = (text: string) => {
+    removeSearchTerm(text)
+    setHistory(loadSearchHistory())
+  }
+
+  const handleClearAll = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(SEARCH_HISTORY_KEY)
+      setHistory([])
+    }
+  }
+
+  function formatDate(ts: number): string {
+    const d = new Date(ts)
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' +
+           d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  if (history.length === 0) {
+    return (
+      <div className="text-center py-6">
+        <Clock className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+        <p className="text-sm text-gray-400">Nenhuma busca recente</p>
+        <p className="text-xs text-gray-300 mt-1">Suas buscas por produto aparecerao aqui (salvas por 30 dias)</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] text-gray-400 uppercase tracking-wide">Salvas por ate 30 dias</p>
+        <button
+          type="button"
+          onClick={handleClearAll}
+          className="text-[10px] text-red-400 hover:text-red-600 transition-colors"
+        >
+          Limpar tudo
+        </button>
+      </div>
+      <div className="space-y-1">
+        {history.map((entry) => (
+          <div
+            key={entry.text}
+            className="group flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Clock className="h-3 w-3 text-gray-300 shrink-0" />
+            <span className="flex-1 text-sm text-gray-700 truncate">{entry.text}</span>
+            <span className="text-[10px] text-gray-300 shrink-0 hidden sm:inline">{formatDate(entry.ts)}</span>
+            <button
+              type="button"
+              onClick={() => handleRemove(entry.text)}
+              className="h-5 w-5 flex items-center justify-center rounded-full text-gray-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function UserProfile({ onLogout }: UserProfileProps) {
@@ -166,6 +269,18 @@ export default function UserProfile({ onLogout }: UserProfileProps) {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Minhas ultimas buscas */}
+      <Card className="border-gray-100">
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Clock className="h-4 w-4 text-red-600" /> Minhas ultimas buscas
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          <SearchHistoryList />
         </CardContent>
       </Card>
 
