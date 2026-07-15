@@ -20,6 +20,10 @@ import {
   Loader2,
   UserCircle,
   Save,
+  Trash2,
+  X,
+  Eye,
+  Pencil,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,6 +36,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { api, useSession } from './AppShell'
 import { toast } from 'sonner'
+import { UploadLoading } from './LoadingAnimation'
 import {
   Select,
   SelectContent,
@@ -91,6 +96,9 @@ interface EncarteItem {
   titulo: string
   statusExtracao: string
   criadoEm: string
+  pdfPath?: string | null
+  dataInicio?: string | null
+  dataFim?: string | null
   _count: { produtos: number }
 }
 
@@ -728,6 +736,18 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
   const [dataFim, setDataFim] = useState('')
   const [uploading, setUploading] = useState(false)
 
+  // Review state (pós-upload)
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [reviewEncarteId, setReviewEncarteId] = useState('')
+  const [reviewProdutos, setReviewProdutos] = useState<Array<{ nome: string; marca: string | null; preco: string; unidade: string | null }>>([])
+  const [reviewPublishing, setReviewPublishing] = useState(false)
+
+  // Delete encarte
+  const [deletingEncarte, setDeletingEncarte] = useState<string | null>(null)
+
+  // Delete produto individual
+  const [deletingProduto, setDeletingProduto] = useState<string | null>(null)
+
   // Suporte state
   const [suporteOpen, setSuporteOpen] = useState(false)
   const [suporteCat, setSuporteCat] = useState('')
@@ -757,6 +777,13 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
     }
   }
 
+  // Refresh encartes
+  const refreshEncartes = useCallback(() => {
+    api<{ encartes: any[] }>('/api/mercado/meus-encartes')
+      .then((d) => setEncartes(d.encartes || []))
+      .catch(() => {})
+  }, [])
+
   // Fetch BI
   useEffect(() => {
     api<BIData>('/api/mercado/bi')
@@ -766,12 +793,10 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
 
   // Fetch encartes com produtos do mercado logado
   useEffect(() => {
-    api<{ encartes: any[] }>('/api/mercado/meus-encartes')
-      .then((d) => setEncartes(d.encartes || []))
-      .catch(() => {})
-  }, [conta.id])
+    refreshEncartes()
+  }, [conta.id, refreshEncartes])
 
-  // Upload PDF
+  // Upload PDF → abre revisão
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!titulo.trim()) {
@@ -803,7 +828,7 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
       fd.append('dataInicio', dataInicio)
       fd.append('dataFim', dataFim)
       fd.append('pdf', file)
-      const result = await api<{ ok: boolean; produtosExtraidos: number; log?: string; erro?: string }>('/api/mercado/encarte', {
+      const result = await api<{ ok: boolean; encarte: any; produtos?: any[]; log?: string; erro?: string }>('/api/mercado/encarte', {
         method: 'POST',
         body: fd,
       })
@@ -811,9 +836,13 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
         toast.error((result as any).erro, { duration: 5000 })
         return
       }
-      const n = (result as any).produtosExtraidos || 0
-      if (n > 0) {
-        toast.success(`Encarte enviado! ${n} produtos extraídos do PDF.`, { duration: 5000 })
+      const encarteId = result.encarte?.id
+      const produtos = result.produtos || []
+      if (produtos.length > 0) {
+        // Abre tela de revisão
+        setReviewEncarteId(encarteId)
+        setReviewProdutos(produtos)
+        setReviewOpen(true)
       } else {
         toast.success('Encarte enviado! Nenhum produto foi extraído automaticamente (PDF pode ser imagem ou sem preços visíveis).', { duration: 6000 })
       }
@@ -822,13 +851,72 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
       setDataFim('')
       if (input) input.value = ''
       // Refresh
-      api<{ encartes: EncarteItem[] }>(`/api/mercados/${conta.id}`)
-        .then((d) => setEncartes(d.encartes || []))
-        .catch(() => {})
+      refreshEncartes()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao enviar')
     } finally {
       setUploading(false)
+    }
+  }
+
+  // Publicar produtos após revisão
+  const handlePublish = async () => {
+    if (reviewProdutos.length === 0) {
+      toast.error('Nenhum produto para publicar')
+      return
+    }
+    setReviewPublishing(true)
+    try {
+      const res = await api<{ ok: boolean; totalSalvos: number }>(`/api/mercado/encarte/${reviewEncarteId}/publicar`, {
+        method: 'POST',
+        body: JSON.stringify({ produtos: reviewProdutos }),
+      })
+      toast.success(`${res.totalSalvos} produto(s) publicado(s) com sucesso!`)
+      setReviewOpen(false)
+      setReviewProdutos([])
+      setReviewEncarteId('')
+      refreshEncartes()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao publicar')
+    } finally {
+      setReviewPublishing(false)
+    }
+  }
+
+  // Excluir produto da revisão
+  const removeReviewProduto = (index: number) => {
+    setReviewProdutos((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  // Excluir encarte
+  const handleDeleteEncarte = async (eid: string) => {
+    setDeletingEncarte(eid)
+    try {
+      await api(`/api/mercado/encarte/${eid}`, { method: 'DELETE' })
+      toast.success('Encarte excluído!')
+      if (expandedEncarte === eid) setExpandedEncarte(null)
+      refreshEncartes()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao excluir')
+    } finally {
+      setDeletingEncarte(null)
+    }
+  }
+
+  // Excluir produto individual de encarte já publicado
+  const handleDeleteProduto = async (produtoId: string, encarteId: string) => {
+    setDeletingProduto(produtoId)
+    try {
+      await api(`/api/mercado/produto/${produtoId}`, { method: 'DELETE' })
+      toast.success('Produto removido!')
+      // Refresh produtos do encarte
+      const prods = await api<any[]>(`/api/mercado/encarte/${encarteId}/produtos`)
+      setEncarteProducts((prev) => ({ ...prev, [encarteId]: prods }))
+      refreshEncartes()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao remover')
+    } finally {
+      setDeletingProduto(null)
     }
   }
 
@@ -937,7 +1025,10 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
           </CardTitle>
         </CardHeader>
         <CardContent className="px-4 pb-4">
-          <form onSubmit={handleUpload} className="flex flex-col gap-3">
+          {uploading ? (
+            <UploadLoading />
+          ) : (
+            <form onSubmit={handleUpload} className="flex flex-col gap-3">
             <Input
               placeholder="Título do encarte"
               value={titulo}
@@ -987,6 +1078,7 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
               </Button>
             </div>
           </form>
+          )}
         </CardContent>
       </Card>
 
@@ -1174,6 +1266,14 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
                           Ver PDF
                         </a>
                       )}
+                      <button
+                        onClick={(ev) => { ev.stopPropagation(); if (confirm('Excluir este encarte e todos os produtos?')) handleDeleteEncarte(e.id) }}
+                        disabled={deletingEncarte === e.id}
+                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                        title="Excluir encarte"
+                      >
+                        {deletingEncarte === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      </button>
                       <Badge
                         variant={
                           e.statusExtracao === 'concluido'
@@ -1204,11 +1304,8 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
                         >
                           <div className="border-t border-gray-50 max-h-60 overflow-y-auto">
                             {prods.map((p: any) => (
-                              <div
-                                key={p.id}
-                                className="flex items-center justify-between px-3 py-2 border-b border-gray-50 last:border-0"
-                              >
-                                <div className="min-w-0">
+                                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-50 last:border-0">
+                                <div className="min-w-0 flex-1">
                                   <p className="text-xs font-medium truncate">
                                     {p.nome}
                                     {p.marca && (
@@ -1223,9 +1320,19 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
                                     </p>
                                   )}
                                 </div>
-                                <span className="text-xs font-bold text-red-600 shrink-0 ml-2">
-                                  {p.preco}
-                                </span>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                  <span className="text-xs font-bold text-red-600">
+                                    {p.preco}
+                                  </span>
+                                  <button
+                                    onClick={(ev) => { ev.stopPropagation(); if (confirm('Excluir este produto?')) handleDeleteProduto(p.id, e.id) }}
+                                    disabled={deletingProduto === p.id}
+                                    className="text-gray-300 hover:text-red-500 transition-colors"
+                                    title="Excluir produto"
+                                  >
+                                    {deletingProduto === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                                  </button>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -1285,6 +1392,114 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
           )}
         </AnimatePresence>
       </Card>
+
+      {/* ── Modal de Revisão Pós-Upload ── */}
+      <AnimatePresence>
+        {reviewOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4"
+            onClick={() => { if (!reviewPublishing) setReviewOpen(false) }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <Eye className="h-5 w-5 text-orange-500" />
+                  <h3 className="text-base font-bold text-gray-800">Revisar Produtos</h3>
+                </div>
+                <button onClick={() => !reviewPublishing && setReviewOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Info */}
+              <div className="px-5 py-3 bg-orange-50 border-b border-orange-100">
+                <p className="text-xs text-orange-800">
+                  Revise os produtos extraídos do PDF. Remova itens incorretos e clique em <strong>Publicar</strong> quando estiver pronto.
+                </p>
+                <p className="text-xs text-orange-600 mt-1 font-medium">
+                  {reviewProdutos.length} produto{reviewProdutos.length !== 1 ? 's' : ''} encontrado{reviewProdutos.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+
+              {/* Lista de produtos */}
+              <div className="flex-1 overflow-y-auto px-5 py-3">
+                {reviewProdutos.length === 0 ? (
+                  <div className="text-center py-10">
+                    <Package className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-400">Todos os produtos foram removidos.</p>
+                    <p className="text-xs text-gray-400 mt-1">Feche esta janela e tente novamente.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {reviewProdutos.map((p, idx) => (
+                      <motion.div
+                        key={idx}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.02 }}
+                        className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-100 hover:border-red-200 transition-colors group"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate text-gray-800">
+                            {p.nome}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {p.marca && <span className="text-[10px] text-gray-400">{p.marca}</span>}
+                            {p.unidade && <span className="text-[10px] text-blue-500">{p.unidade}</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          <span className="text-sm font-bold text-red-600">{p.preco}</span>
+                          <button
+                            onClick={() => removeReviewProduto(idx)}
+                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all p-1"
+                            title="Remover item"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-10 text-sm"
+                  onClick={() => setReviewOpen(false)}
+                  disabled={reviewPublishing}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white h-10 text-sm font-semibold"
+                  onClick={handlePublish}
+                  disabled={reviewPublishing || reviewProdutos.length === 0}
+                >
+                  {reviewPublishing ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Publicando...</>
+                  ) : (
+                    <><CheckCircle className="h-4 w-4 mr-2" /> Publicar {reviewProdutos.length} produto{reviewProdutos.length !== 1 ? 's' : ''}</>
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

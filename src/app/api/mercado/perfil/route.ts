@@ -30,6 +30,9 @@ export async function GET() {
       telefone: mercado.telefone || '',
       cnpj: mercado.cnpj,
       status: mercado.status,
+      pilotoInicio: mercado.pilotoInicio || null,
+      pilotoFim: mercado.pilotoFim || null,
+      mensalidade: mercado.mensalidade || 599,
     })
   } catch (e) {
     console.error('[mercado/perfil GET] erro:', e)

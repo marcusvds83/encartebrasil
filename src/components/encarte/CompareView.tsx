@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { api } from './AppShell'
 import { toast } from 'sonner'
+import { CompareLoading } from './LoadingAnimation'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -89,14 +90,7 @@ export default function CompareView({ sessionId, onAddToList }: CompareViewProps
 
   // ── Loading ──────────────────────────────────────────────────────────
   if (loading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-56" />
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-48 w-full rounded-xl" />
-        ))}
-      </div>
-    )
+    return <CompareLoading />
   }
 
   // ── Error ────────────────────────────────────────────────────────────

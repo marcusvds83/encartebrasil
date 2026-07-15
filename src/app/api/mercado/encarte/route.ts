@@ -41,56 +41,30 @@ export async function POST(req: NextRequest) {
       dataInicio,
       dataFim,
       statusExtracao: 'processando',
-      extracaoLog: 'PDF recebido, iniciando extração...',
+      extracaoLog: 'PDF recebido, aguardando revisão dos produtos...',
       criadoEm: new Date().toISOString(),
     })
 
     // ── Extrai produtos do PDF usando parser inteligente ─────────────────
-    let produtosExtraidos = 0
+    let produtosExtraidos: Array<{ nome: string; marca: string | null; preco: string; unidade: string | null }> = []
     let logExtracao = 'PDF recebido. '
     try {
       const { produtos } = await extrairProdutosDoPDF(buffer)
-      logExtracao += `Parser identificou ${produtos.length} produto(s). `
-
-      let salvos = 0
-      for (const p of produtos) {
-        try {
-          await db.produto.create({
-            encarteId: encarte.id,
-            mercadoId: session.id,
-            nome: p.nome,
-            marca: p.marca || null,
-            preco: p.preco,
-            unidade: p.unidade || null,
-            normalizado: p.nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
-            criadoEm: new Date().toISOString(),
-          })
-          salvos++
-        } catch {
-          // ignora erro de produto individual
-        }
-      }
-      produtosExtraidos = salvos
-      logExtracao += `${salvos} produto(s) salvo(s) no encarte.`
-
-      await (db.encarte as any).update?.(encarte.id, {
-        statusExtracao: 'concluido',
-        extracaoLog: logExtracao,
-      })
+      produtosExtraidos = produtos.map(p => ({
+        nome: p.nome,
+        marca: p.marca,
+        preco: p.preco,
+        unidade: p.unidade,
+      }))
+      logExtracao += `Parser identificou ${produtos.length} produto(s). Aguardando revisão antes de publicar.`
     } catch (e: any) {
       logExtracao += ` Erro na extração: ${e?.message || String(e)}`
-      try {
-        await (db.encarte as any).update?.(encarte.id, {
-          statusExtracao: 'erro',
-          extracaoLog: logExtracao,
-        })
-      } catch {}
     }
 
     return NextResponse.json({
       ok: true,
       encarte,
-      produtosExtraidos,
+      produtos: produtosExtraidos,
       log: logExtracao,
     })
   } catch (e: any) {

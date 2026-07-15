@@ -292,7 +292,8 @@ export const demoDb = {
     findMany: async (opts?: { where?: { mercadoId: string } }) => {
       let list = [...encartes]
       if (opts?.where?.mercadoId) {
-        list = list.filter((e) => e.mercadoId === opts.where.mercadoId)
+        const mid = opts.where.mercadoId
+        list = list.filter((e) => e.mercadoId === mid)
       }
       return list.sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)).map(e => ({
         ...e,
@@ -302,6 +303,15 @@ export const demoDb = {
 
     count: async (opts: { where: { mercadoId: string } }) => {
       return encartes.filter((e) => e.mercadoId === opts.where.mercadoId).length
+    },
+
+    delete: async (id: string) => {
+      const i = encartes.findIndex((e) => e.id === id)
+      if (i !== -1) encartes.splice(i, 1)
+      // Remove todos os produtos associados
+      for (let j = produtos.length - 1; j >= 0; j--) {
+        if (produtos[j].encarteId === id) produtos.splice(j, 1)
+      }
     },
   },
 
@@ -347,9 +357,16 @@ export const demoDb = {
       return { ...novo }
     },
 
-    deleteMany: async (opts: { where: { id: string } }) => {
-      const i = produtos.findIndex((p) => p.id === opts.where.id)
-      if (i !== -1) produtos.splice(i, 1)
+    deleteMany: async (opts: { where: { id?: string; encarteId?: string; mercadoId?: string } }) => {
+      const where = opts.where
+      for (let i = produtos.length - 1; i >= 0; i--) {
+        const p = produtos[i]
+        let match = true
+        if (where.id && p.id !== where.id) match = false
+        if (where.encarteId && p.encarteId !== where.encarteId) match = false
+        if (where.mercadoId && p.mercadoId !== where.mercadoId) match = false
+        if (match) produtos.splice(i, 1)
+      }
     },
 
     count: async (opts: { where: { mercadoId: string } }) => {

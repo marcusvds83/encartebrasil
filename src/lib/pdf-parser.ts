@@ -109,21 +109,6 @@ function isNoise(line: string): boolean {
   return false
 }
 
-/**
- * Verifica se uma linha parece ser um nome de produto válido
- */
-function isProductName(line: string): boolean {
-  const trimmed = line.trim()
-  if (!trimmed || trimmed.length < 3) return false
-  if (isNoise(trimmed)) return false
-
-  const letters = trimmed.replace(/[^a-zA-ZÁÉÍÓÚÃÕÂÊÎÔÛÇàáéíóúãõâêîôûç]/g, '')
-  if (letters.length < 3) return false
-  if (/^R\$/i.test(trimmed)) return false
-  if (trimmed.length < 5 && /^[\d.,\s]+$/.test(trimmed)) return false
-
-  return true
-}
 
 /**
  * Extrai informações de unidade/marca da linha de detalhes
@@ -183,39 +168,94 @@ function extractUnitFromPrice(priceLine: string): string | null {
 }
 
 /**
- * Parser principal: extrai produtos do texto do PDF
+ * Normaliza um texto para comparação de duplicatas:
+ * minúsculas, sem diacríticos, espaços colapsados.
+ */
+function normalizeForDedup(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Verifica se uma linha parece ser um nome de produto para a abordagem "name-first".
+ * Mais restritivo que a função genérica isProductName.
+ */
+function isValidProductLine(line: string): boolean {
+  const trimmed = line.trim()
+  if (!trimmed) return false
+
+  // Menos de 4 caracteres — não é nome de produto
+  if (trimmed.length < 4) return false
+
+  // Apenas dígitos
+  if (/^\d+$/.test(trimmed)) return false
+
+  // Apenas "un." ou "UN"
+  if (/^un\.?$/i.test(trimmed)) return false
+
+  // Contém "DE POR APENAS"
+  if (/de\s+por\s+apenas/i.test(trimmed)) return false
+
+  // Apenas preço (R$ XX,XX) com nada mais
+  if (/^R\$\s*\d+[.,]\d{2}\s*$/i.test(trimmed)) return false
+
+  // Começa com R$ (é linha de preço)
+  if (/^R\$/i.test(trimmed)) return false
+
+  // Ruído geral
+  if (isNoise(trimmed)) return false
+
+  // Precisa ter pelo menos 3 caracteres de letra
+  const letters = trimmed.replace(/[^a-zA-ZÁÉÍÓÚÃÕÂÊÎÔÛÇàáéíóúãõâêîôûç]/g, '')
+  if (letters.length < 3) return false
+
+  return true
+}
+
+/**
+ * Parser principal: extrai produtos do texto do PDF.
+ *
+ * Abordagem "name-first": encontra linhas de nome de produto e olha
+ * ADIANTE (1-5 linhas) por uma linha de preço (R$ XX,XX).
  */
 export function parseProdutosDoTexto(text: string): ProdutoExtraido[] {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
   const produtos: ProdutoExtraido[] = []
   const usedIndices = new Set<number>()
+  const seenKeys = new Set<string>()
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    const priceMatch = line.match(PRICE_REGEX)
-
-    if (!priceMatch) continue
     if (usedIndices.has(i)) continue
+    if (!isValidProductLine(line)) continue
 
-    const precoStr = `R$ ${priceMatch[1].replace('.', ',')}`
-    const priceUnit = extractUnitFromPrice(line)
+    // Busca preço nas próximas 1-5 linhas
+    let precoStr: string | null = null
+    let priceLineIndex = -1
+    let priceUnit: string | null = null
 
-    let productName: string | null = null
-    let productNameIndex = -1
-
-    for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+    for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
       if (usedIndices.has(j)) continue
-      if (isProductName(lines[j])) {
-        productName = lines[j]
-        productNameIndex = j
+      const priceMatch = lines[j].match(PRICE_REGEX)
+      if (priceMatch) {
+        precoStr = `R$ ${priceMatch[1].replace('.', ',')}`
+        priceUnit = extractUnitFromPrice(lines[j])
+        priceLineIndex = j
         break
       }
     }
 
-    if (!productName) continue
+    // Sem preço encontrado → não é listagem de produto
+    if (!precoStr) continue
 
+    // Tenta encontrar detalhes (unidade/marca) entre nome e preço, ou após o preço
     let detailsLine = ''
-    for (let j = productNameIndex + 1; j < Math.min(productNameIndex + 3, lines.length); j++) {
+    for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+      if (j === priceLineIndex) continue
       if (usedIndices.has(j)) continue
       if (!isNoise(lines[j]) && !PRICE_REGEX.test(lines[j])) {
         detailsLine = lines[j]
@@ -227,12 +267,14 @@ export function parseProdutosDoTexto(text: string): ProdutoExtraido[] {
     const { unidade: detailUnit, marca } = parseDetails(detailsLine)
     const unidade = detailUnit || priceUnit || null
 
-    // Preserva traços em palavras compostas (Contra-Filé, Lava-Roupas)
-    let nomeLimpo = productName
-      .replace(/\s+[-–]\s+.*$/, '')
-      .trim()
+    // Limpa o nome (preserva traços em palavras compostas como Contra-Filé)
+    let nomeLimpo = line.replace(/\s+[-–]\s+.*$/, '').trim()
+    if (nomeLimpo.length < 6) nomeLimpo = line.trim()
 
-    if (nomeLimpo.length < 6) nomeLimpo = productName
+    // Deduplicação rigorosa: normaliza nome+preço e mantém só a primeira ocorrência
+    const dedupKey = `${normalizeForDedup(nomeLimpo)}|${precoStr}`
+    if (seenKeys.has(dedupKey)) continue
+    seenKeys.add(dedupKey)
 
     produtos.push({
       nome: nomeLimpo,
@@ -242,7 +284,7 @@ export function parseProdutosDoTexto(text: string): ProdutoExtraido[] {
     })
 
     usedIndices.add(i)
-    usedIndices.add(productNameIndex)
+    if (priceLineIndex >= 0) usedIndices.add(priceLineIndex)
   }
 
   return produtos

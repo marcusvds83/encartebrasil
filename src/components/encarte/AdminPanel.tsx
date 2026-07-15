@@ -18,6 +18,7 @@ import {
   UserCheck,
   UserX,
   Clock,
+  AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -415,6 +416,13 @@ function MarketRow({
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   const changeStatus = async (newStatus: string) => {
+    // Ao ativar (ou cadastrar direto como ativo), avisa sobre contrato
+    if (newStatus === 'ativo' && m.status !== 'ativo') {
+      const ok = confirm(
+        `Ao ativar "${m.nome}", um contrato PJ deverá ser assinado em até 3 dias antes de encerrar o piloto para que o mercado efetue o pagamento mensal pela plataforma.\n\nDeseja prosseguir com a ativação?`
+      )
+      if (!ok) return
+    }
     setActionLoading(`status-${m.id}`)
     try {
       await api(`/api/admin/status/${m.id}`, {
@@ -554,6 +562,19 @@ function MarketRow({
               )}
               {nextLabel}
             </Button>
+
+            {/* Contrato button - aparece quando ativo ou piloto expirado */}
+            {(m.status === 'ativo' || m.status === 'piloto') && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs h-7 border-green-200 text-green-600 hover:bg-green-50"
+                onClick={() => toast.info(`Contrato de "${m.nome}" será disponibilizado em breve.`)}
+              >
+                <FileText className="h-3 w-3 mr-1" />
+                Contrato
+              </Button>
+            )}
 
             {/* Destaque toggle */}
             <Button

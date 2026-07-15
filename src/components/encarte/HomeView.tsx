@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { api, getSessionId } from './AppShell'
+import { HomeLoading } from './LoadingAnimation'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -339,13 +340,7 @@ function MarketDetailView({
   )
 
   if (loading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-32" />
-        <Skeleton className="h-40 w-full rounded-xl" />
-        <Skeleton className="h-60 w-full rounded-xl" />
-      </div>
-    )
+    return <HomeLoading />
   }
 
   if (error || !detail) {
