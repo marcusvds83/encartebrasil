@@ -30,3 +30,4 @@ upload/
 download/
 tool-results/dist-static/
 next.config.static.ts
+jdk-21.0.2/
