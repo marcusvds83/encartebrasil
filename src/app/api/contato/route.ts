@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { enviarEmail } from '@/lib/email'
 
 /**
  * API de contato / suporte
@@ -74,46 +75,28 @@ export async function POST(req: NextRequest) {
     }
     mensagens.push(msg)
 
-    // Tenta enviar e-mail (usa defaults do email.ts se env vars nao definidas)
-    const SMTP_HOST = process.env.SMTP_HOST || 'mail.3codenexus.com.br'
-    const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10)
-    const SMTP_USER = process.env.SMTP_USER || 'contato@3codenexus.com.br'
-    const SMTP_PASS = process.env.SMTP_PASS || 'kermit051326'
-    const SMTP_FROM = process.env.SMTP_FROM || 'EncarteBrasil <contato@3codenexus.com.br>'
-
-    console.log(`[contato] enviando email via ${SMTP_HOST}:${SMTP_PORT} user=${SMTP_USER}`)
-    try {
-      const nodemailer = await import('nodemailer')
-      const transporter = nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        secure: false, // porta 587 usa STARTTLS
-        requireTLS: true,
-        auth: { user: SMTP_USER, pass: SMTP_PASS },
-        connectionTimeout: 20_000,
-        greetingTimeout: 10_000,
-        socketTimeout: 25_000,
-        tls: { rejectUnauthorized: false },
-      })
-      const tipoLabel = tipo === 'mercado' ? '[MERCADO]' : '[CONSUMIDOR]'
-      const mercadoInfo = mercadoNome ? ` (${mercadoNome})` : ''
-      const info = await transporter.sendMail({
-        from: SMTP_FROM,
-        to: process.env.CONTATO_EMAIL || 'contato@3codenexus.com.br',
-        subject: `${tipoLabel}${mercadoInfo} ${categoria}: ${assunto}`,
-        text: [
-          `Tipo: ${tipo.toUpperCase()}${mercadoInfo}`,
-          `Nome: ${msgNome}`,
-          `E-mail: ${msgEmail}`,
-          `Categoria: ${categoria}`,
-          `Assunto: ${assunto}`,
-          '', msg.mensagem, '',
-          `Enviado em: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
-        ].join('\n'),
-      })
-      console.log(`[contato] email enviado: ${info.messageId}`)
-    } catch (emailErr: any) {
-      console.error(`[contato] erro ao enviar e-mail: ${emailErr?.message || emailErr}`)
+    // Envia e-mail via Resend (primário) ou SMTP (fallback local)
+    const tipoLabel = tipo === 'mercado' ? '[MERCADO]' : '[CONSUMIDOR]'
+    const mercadoInfo = mercadoNome ? ` (${mercadoNome})` : ''
+    const texto = [
+      `Tipo: ${tipo.toUpperCase()}${mercadoInfo}`,
+      `Nome: ${msgNome}`,
+      `E-mail: ${msgEmail}`,
+      `Categoria: ${categoria}`,
+      `Assunto: ${assunto}`,
+      '', msg.mensagem, '',
+      `Enviado em: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
+    ].join('\n')
+    const html = texto.replace(/\n/g, '<br>')
+    const emailResult = await enviarEmail({
+      to: process.env.CONTATO_EMAIL || 'contato@3codenexus.com.br',
+      subject: `${tipoLabel}${mercadoInfo} ${categoria}: ${assunto}`,
+      html,
+      text: texto,
+      replyTo: msgEmail,
+    })
+    if (!emailResult.ok) {
+      console.error(`[contato] falha e-mail: ${emailResult.error}`)
     }
 
     return NextResponse.json({ ok: true, mensagem: 'Mensagem enviada com sucesso!' })
