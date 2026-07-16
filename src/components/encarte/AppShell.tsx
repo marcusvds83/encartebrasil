@@ -29,6 +29,7 @@ import MarketPanel from './MarketPanel'
 import AdminPanel from './AdminPanel'
 import UserProfile from './UserProfile'
 import MarketAccountView from './MarketAccountView'
+import TermosDeUso from './TermosDeUso'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,7 @@ export interface AuthUser {
   nome?: string
   status?: string
   photoURL?: string | null
+  termosAceitos?: string
 }
 
 export type MarketUserProps = AuthUser & { tipo: 'mercado' }
@@ -187,6 +189,7 @@ export default function AppShell() {
           nome: data.nome,
           status: data.status,
           photoURL: data.photoURL,
+          termosAceitos: data.termosAceitos,
         })
         // After login, navigate to appropriate tab
         if (data.tipo === 'mercado') {
@@ -278,6 +281,19 @@ export default function AppShell() {
           />
         )
     }
+  }
+
+  // ── Termos de Uso — bloqueia até aceitar ─────────────────────────────
+  const precisaTermos = session && !session.termosAceitos && session.tipo !== 'admin'
+
+  if (precisaTermos) {
+    return (
+      <TermosDeUso
+        tipo={session.tipo === 'mercado' ? 'empresa' : 'consumidor'}
+        onAceitar={checkAuth}
+        onRecusar={handleLogout}
+      />
+    )
   }
 
   // ── Loading splash ─────────────────────────────────────────────────────

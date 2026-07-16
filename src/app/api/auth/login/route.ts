@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
         id: m.id,
         nome: m.nome,
         status: m.status,
+        termosAceitos: m.termosAceitos || undefined,
       }
       const cookie = sessionCookie(data)
       const res = NextResponse.json({ tipo: 'mercado', ...data })
@@ -108,6 +109,7 @@ export async function POST(req: NextRequest) {
         nome: usuario.nome || undefined,
         photoURL: usuario.photoURL,
         provider: 'email',
+        termosAceitos: usuario.termosAceitos || undefined,
       }
       const cookie = sessionCookie(data)
       console.log(`[login] consumidor: OK, session id=${data.id}, cookie sameSite=none secure=${process.env.NODE_ENV === 'production'}`)
@@ -125,6 +127,7 @@ export async function POST(req: NextRequest) {
         id: mFallback.id,
         nome: mFallback.nome,
         status: mFallback.status,
+        termosAceitos: mFallback.termosAceitos || undefined,
       }
       const cookie = sessionCookie(data)
       const res = NextResponse.json({ tipo: 'mercado', ...data })

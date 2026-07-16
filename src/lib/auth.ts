@@ -10,6 +10,7 @@ export interface SessionData {
   status?: string
   photoURL?: string | null
   provider?: string
+  termosAceitos?: string
 }
 
 export async function getSession(): Promise<SessionData | null> {
@@ -25,15 +26,15 @@ export async function getSession(): Promise<SessionData | null> {
     } else if (data.tipo === 'mercado') {
       const m = await db.mercado.findUnique({
         where: { id: data.id },
-        select: { nome: true, status: true, emailLogin: true },
+        select: { nome: true, status: true, emailLogin: true, termosAceitos: true },
       })
-      if (m) return { ...data, nome: m.nome, status: m.status }
+      if (m) return { ...data, nome: m.nome, status: m.status, termosAceitos: (m as any).termosAceitos || undefined }
     } else if (data.tipo === 'usuario') {
       const u = await db.usuario.findUnique({
         where: { id: data.id },
-        select: { nome: true, email: true, photoURL: true, provider: true },
+        select: { nome: true, email: true, photoURL: true, provider: true, termosAceitos: true },
       })
-      if (u) return { ...data, nome: (u as any).nome || undefined, photoURL: (u as any).photoURL }
+      if (u) return { ...data, nome: (u as any).nome || undefined, photoURL: (u as any).photoURL, termosAceitos: (u as any).termosAceitos || undefined }
     }
     return null
   } catch {
