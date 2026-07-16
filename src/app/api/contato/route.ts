@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { enviarEmail } from '@/lib/email'
 
 const ODOO_WEBHOOK_URL = 'https://panfletosbrasil.odoo.com/web/hook/a1968b1c-2885-46f2-b77b-88cd76337459'
 const ODOO_API_KEY = 'dfb4bca4b7563ed7fa4f7664d1d61ef2fdf9a4ee'
@@ -11,6 +10,7 @@ const ODOO_API_KEY = 'dfb4bca4b7563ed7fa4f7664d1d61ef2fdf9a4ee'
  * Mercado logado: preenche dados do mercado automaticamente
  * Consumidor logado: identifica como consumidor
  * Mensagens ficam armazenadas em memória e podem ser vistas pelo admin via GET
+ * Envio direto para Odoo Helpdesk via webhook (sem e-mail)
  */
 
 const mensagens: Array<{
@@ -82,29 +82,31 @@ export async function POST(req: NextRequest) {
     }
     mensagens.push(msg)
 
-    const tipoLabel = tipo === 'mercado' ? '[MERCADO]' : '[CONSUMIDOR]'
-    const mercadoInfo = mercadoNome ? ` (${mercadoNome})` : ''
-    const texto = [
-      `Tipo: ${tipo.toUpperCase()}${mercadoInfo}`,
+    // Monta descrição completa para o ticket Odoo
+    const descricao = [
+      `Tipo: ${tipo.toUpperCase()}${mercadoNome ? ` (${mercadoNome})` : ''}`,
       `Nome: ${msgNome}`,
       `E-mail: ${msgEmail}`,
+      `Telefone: ${telefone || 'Não informado'}`,
       `Categoria: ${categoria}`,
       `Assunto: ${assunto}`,
-      '', msg.mensagem, '',
+      '',
+      msg.mensagem,
+      '',
       `Enviado em: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
     ].join('\n')
 
-    // Envia para Odoo Helpdesk
+    // Envia para Odoo Helpdesk via webhook
     try {
       const odooPayload = {
         partner_id: tipo === 'mercado' ? 'MERCADO' : 'CONSUMIDOR',
-        partner_phone: telefone,
+        partner_phone: telefone || '',
         x_studio_contato_do_mercado_1: msgNome,
         x_studio_related_email_1: msgEmail,
-        description: texto,
+        description: descricao,
         x_studio_categoria: categoria,
       }
-      console.log(`[contato] enviando para Odoo: tipo=${odooPayload.partner_id}`)
+      console.log(`[contato] Odoo payload: ${JSON.stringify(odooPayload)}`)
       const odooRes = await fetch(ODOO_WEBHOOK_URL, {
         method: 'POST',
         headers: {
@@ -121,19 +123,6 @@ export async function POST(req: NextRequest) {
       }
     } catch (odooErr: any) {
       console.error(`[contato] Odoo falha: ${odooErr?.message || odooErr}`)
-    }
-
-    // Envia e-mail via Resend (primário) ou SMTP (fallback local)
-    const html = texto.replace(/\n/g, '<br>')
-    const emailResult = await enviarEmail({
-      to: process.env.CONTATO_EMAIL || 'contato@3codenexus.com.br',
-      subject: `${tipoLabel}${mercadoInfo} ${categoria}: ${assunto}`,
-      html,
-      text: texto,
-      replyTo: msgEmail,
-    })
-    if (!emailResult.ok) {
-      console.error(`[contato] falha e-mail: ${emailResult.error}`)
     }
 
     return NextResponse.json({ ok: true, mensagem: 'Mensagem enviada com sucesso!' })
