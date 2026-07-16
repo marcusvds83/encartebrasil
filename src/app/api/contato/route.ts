@@ -3,6 +3,9 @@ import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { enviarEmail } from '@/lib/email'
 
+const ODOO_WEBHOOK_URL = 'https://panfletosbrasil.odoo.com/web/hook/a1968b1c-2885-46f2-b77b-88cd76337459'
+const ODOO_API_KEY = 'dfb4bca4b7563ed7fa4f7664d1d61ef2fdf9a4ee'
+
 /**
  * API de contato / suporte
  * Mercado logado: preenche dados do mercado automaticamente
@@ -19,6 +22,7 @@ const mensagens: Array<{
   assunto: string
   mensagem: string
   mercadoNome?: string | null
+  telefone?: string
   criadoEm: string
 }> = []
 
@@ -43,6 +47,7 @@ export async function POST(req: NextRequest) {
     let msgNome = nome || ''
     let msgEmail = email || ''
     let mercadoNome: string | null = null
+    let telefone = ''
 
     if (session?.tipo === 'mercado') {
       tipo = 'mercado'
@@ -51,6 +56,7 @@ export async function POST(req: NextRequest) {
         msgNome = (mercado as any).nome || session.nome || ''
         msgEmail = (mercado as any).emailLogin || session.email || ''
         mercadoNome = (mercado as any).nome || null
+        telefone = (mercado as any).telefone || ''
       }
     } else if (session?.tipo === 'usuario') {
       tipo = 'consumidor'
@@ -71,11 +77,11 @@ export async function POST(req: NextRequest) {
       assunto,
       mensagem: mensagem.trim(),
       mercadoNome,
+      telefone,
       criadoEm: new Date().toISOString(),
     }
     mensagens.push(msg)
 
-    // Envia e-mail via Resend (primário) ou SMTP (fallback local)
     const tipoLabel = tipo === 'mercado' ? '[MERCADO]' : '[CONSUMIDOR]'
     const mercadoInfo = mercadoNome ? ` (${mercadoNome})` : ''
     const texto = [
@@ -87,6 +93,37 @@ export async function POST(req: NextRequest) {
       '', msg.mensagem, '',
       `Enviado em: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
     ].join('\n')
+
+    // Envia para Odoo Helpdesk
+    try {
+      const odooPayload = {
+        partner_id: tipo === 'mercado' ? 'MERCADO' : 'CONSUMIDOR',
+        partner_phone: telefone,
+        x_studio_contato_do_mercado_1: msgNome,
+        x_studio_related_email_1: msgEmail,
+        description: texto,
+        x_studio_categoria: categoria,
+      }
+      console.log(`[contato] enviando para Odoo: tipo=${odooPayload.partner_id}`)
+      const odooRes = await fetch(ODOO_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': ODOO_API_KEY,
+        },
+        body: JSON.stringify(odooPayload),
+      })
+      if (odooRes.ok) {
+        console.log(`[contato] Odoo OK — status ${odooRes.status}`)
+      } else {
+        const errText = await odooRes.text().catch(() => '')
+        console.error(`[contato] Odoo erro ${odooRes.status}: ${errText}`)
+      }
+    } catch (odooErr: any) {
+      console.error(`[contato] Odoo falha: ${odooErr?.message || odooErr}`)
+    }
+
+    // Envia e-mail via Resend (primário) ou SMTP (fallback local)
     const html = texto.replace(/\n/g, '<br>')
     const emailResult = await enviarEmail({
       to: process.env.CONTATO_EMAIL || 'contato@3codenexus.com.br',

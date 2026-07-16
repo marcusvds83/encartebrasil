@@ -17,6 +17,7 @@ android-sdk/
 *.dex
 *.apk
 !public/EncarteBrasil.apk
+!public/PanfletosBrasil.apk
 *.idsig
 *.keystore
 apk-project/build/
@@ -32,3 +33,4 @@ download/
 tool-results/dist-static/
 next.config.static.ts
 jdk-21.0.2/
+jdk-21.0.11/

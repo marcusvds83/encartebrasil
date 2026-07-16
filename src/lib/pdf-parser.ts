@@ -1,5 +1,5 @@
 /**
- * EncarteBrasil PDF Parser
+ * Panfletos Brasil PDF Parser
  *
  * Extrai dados de produtos (nome, marca, preço, unidade) de encartes PDF
  * de supermercados brasileiros.

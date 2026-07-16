@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-export JAVA_HOME=/home/z/my-project/jdk-21.0.2
+export JAVA_HOME=/home/z/my-project/jdk-21.0.11
 SDK="/home/z/my-project/android-sdk"
 BUILD_TOOLS="$SDK/build-tools/35.0.0"
 PLATFORM_JAR="$SDK/platforms/android-34/android.jar"

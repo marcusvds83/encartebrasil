@@ -269,7 +269,7 @@ export default function MarketAccountView({ onLogout }: { onLogout: () => void }
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <p className="text-xs text-gray-600 mb-3">
-              Sua conta está <strong>ativa</strong>. Abaixo está o seu contrato de prestação de serviços com a EncarteBrasil.
+              Sua conta está <strong>ativa</strong>. Abaixo está o seu contrato de prestação de serviços com a Panfletos Brasil.
             </p>
             <Button variant="outline" className="w-full h-9 text-xs" onClick={() => toast.info('Contrato será disponibilizado em breve.')}>
               <Download className="h-3.5 w-3.5 mr-1.5" /> Baixar Contrato Assinado

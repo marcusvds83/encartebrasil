@@ -1,5 +1,5 @@
 /**
- * EncarteBrasil — Serviço de e-mail
+ * Panfletos Brasil — Serviço de e-mail
  *
  * PRIMÁRIO: Resend API (funciona no Render — não precisa de porta SMTP)
  * FALLBACK: Nodemailer SMTP (apenas para desenvolvimento local)
@@ -14,14 +14,14 @@ import { Resend } from 'resend'
 
 // ── Resend (primário — funciona no Render) ──
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
-const RESEND_FROM = process.env.RESEND_FROM || 'EncarteBrasil <onboarding@resend.dev>'
+const RESEND_FROM = process.env.RESEND_FROM || 'Panfletos Brasil <onboarding@resend.dev>'
 
 // ── SMTP fallback (apenas para dev local) ──
 const SMTP_HOST = process.env.SMTP_HOST || 'mail.3codenexus.com.br'
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10)
 const SMTP_USER = process.env.SMTP_USER || 'contato@3codenexus.com.br'
 const SMTP_PASS = process.env.SMTP_PASS || 'kermit051326'
-const SMTP_FROM = process.env.SMTP_FROM || 'EncarteBrasil <contato@3codenexus.com.br>'
+const SMTP_FROM = process.env.SMTP_FROM || 'Panfletos Brasil <contato@3codenexus.com.br>'
 
 export interface EmailOptions {
   to: string
@@ -95,16 +95,16 @@ export async function emailBoasVindasMercado(nome: string, email: string): Promi
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://encartebrasil.onrender.com'
   const result = await enviarEmail({
     to: email,
-    subject: 'Bem-vindo ao EncarteBrasil!',
+    subject: 'Bem-vindo ao Panfletos Brasil!',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="background: linear-gradient(135deg, #dc2626, #f97316); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 28px;">EncarteBrasil</h1>
+          <h1 style="color: white; margin: 0; font-size: 28px;">Panfletos Brasil</h1>
           <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 14px;">Compare precos, economize mais!</p>
         </div>
         <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e5e7eb; border-top: none;">
           <h2 style="color: #1f2937; margin-top: 0;">Ola, ${nome}!</h2>
-          <p style="color: #374151; line-height: 1.6;">Seu cadastro como <strong>mercado parceiro</strong> no EncarteBrasil foi realizado com sucesso!</p>
+          <p style="color: #374151; line-height: 1.6;">Seu cadastro como <strong>mercado parceiro</strong> no Panfletos Brasil foi realizado com sucesso!</p>
           <p style="color: #374151; line-height: 1.6;">Agora voce pode:</p>
           <ul style="color: #374151; line-height: 1.8;">
             <li>Enviar seus encartes em PDF</li>
@@ -130,17 +130,17 @@ export async function emailBoasVindasConsumidor(nome: string, email: string): Pr
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://encartebrasil.onrender.com'
   const result = await enviarEmail({
     to: email,
-    subject: 'Bem-vindo ao EncarteBrasil!',
+    subject: 'Bem-vindo ao Panfletos Brasil!',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="background: linear-gradient(135deg, #dc2626, #f97316); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 28px;">EncarteBrasil</h1>
+          <h1 style="color: white; margin: 0; font-size: 28px;">Panfletos Brasil</h1>
           <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 14px;">Compare precos, economize mais!</p>
         </div>
         <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e5e7eb; border-top: none;">
           <h2 style="color: #1f2937; margin-top: 0;">Ola, ${nome || 'Consumidor'}!</h2>
-          <p style="color: #374151; line-height: 1.6;">Seu cadastro no EncarteBrasil foi realizado com sucesso!</p>
-          <p style="color: #374151; line-height: 1.6;">Com o EncarteBrasil voce pode:</p>
+          <p style="color: #374151; line-height: 1.6;">Seu cadastro no Panfletos Brasil foi realizado com sucesso!</p>
+          <p style="color: #374151; line-height: 1.6;">Com o Panfletos Brasil voce pode:</p>
           <ul style="color: #374151; line-height: 1.8;">
             <li>Pesquisar produtos e comparar precos</li>
             <li>Criar listas de compras</li>
@@ -177,7 +177,7 @@ export async function emailEncartePublicado(
         </div>
         <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e5e7eb; border-top: none;">
           <p style="color: #374151; line-height: 1.6;">Ola, <strong>${nomeMercado}</strong>!</p>
-          <p style="color: #374151; line-height: 1.6;">Seu encarte <strong>"${tituloEncarte}"</strong> foi publicado com sucesso no EncarteBrasil.</p>
+          <p style="color: #374151; line-height: 1.6;">Seu encarte <strong>"${tituloEncarte}"</strong> foi publicado com sucesso no Panfletos Brasil.</p>
           <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0;">
             <p style="margin: 0 0 8px; color: #6b7280; font-size: 13px;">Total de produtos</p>
             <p style="margin: 0; font-size: 32px; font-weight: bold; color: #16a34a;">${totalProdutos}</p>

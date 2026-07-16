@@ -186,7 +186,7 @@ function AdminLoginForm({ onLogin }: { onLogin: () => void }) {
               <Input
                 id="a-email"
                 type="email"
-                placeholder="admin@encartebrasil.com"
+                placeholder="admin@panfletosbrasil.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"

@@ -1,9 +1,9 @@
 /**
- * EncarteBrasil Demo DB — armazenamento em memória (sem Firebase, sem Prisma).
+ * Panfletos Brasil Demo DB — armazenamento em memória (sem Firebase, sem Prisma).
  * Ativado quando a env var DEMO_MODE=true.
  *
  * Dados pré-cadastrados:
- *   Admin:    admin@encartebrasil.com / admin123
+ *   Admin:    admin@panfletosbrasil.com / admin123
  *   Mercado:  CNPJ 11.222.333/0001-81 / super@central.com / super123
  *   Usuario PF: criado automaticamente no primeiro login Google
  *
@@ -108,7 +108,7 @@ interface Admin {
 const admins: Admin[] = [
   {
     id: 'admin-1',
-    email: 'admin@encartebrasil.com',
+    email: 'admin@panfletosbrasil.com',
     senhaHash: hashSenha('admin123'),
   },
 ]

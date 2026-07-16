@@ -15,15 +15,15 @@ export async function GET(req: NextRequest) {
     const resultados: string[] = []
 
     // 1. Cria admin demo se não existir
-    const adminExistente = await db.admin.findUnique({ where: { email: 'admin@encartebrasil.com' } })
+    const adminExistente = await db.admin.findUnique({ where: { email: 'admin@panfletosbrasil.com' } })
     if (!adminExistente) {
       await db.admin.create({
-        email: 'admin@encartebrasil.com',
+        email: 'admin@panfletosbrasil.com',
         senhaHash: hashSenha('admin123'),
       } as any)
-      resultados.push('Admin criado: admin@encartebrasil.com / admin123')
+      resultados.push('Admin criado: admin@panfletosbrasil.com / admin123')
     } else {
-      resultados.push('Admin ja existe: admin@encartebrasil.com')
+      resultados.push('Admin ja existe: admin@panfletosbrasil.com')
     }
 
     // 2. Cria mercado demo se não existir
@@ -174,7 +174,7 @@ export async function GET(req: NextRequest) {
       mensagem: 'Setup concluido com sucesso!',
       resultados,
       credenciais: {
-        admin: { email: 'admin@encartebrasil.com', senha: 'admin123' },
+        admin: { email: 'admin@panfletosbrasil.com', senha: 'admin123' },
         mercado: {
           cnpj: '11.222.333/0001-81',
           email: 'super@central.com',

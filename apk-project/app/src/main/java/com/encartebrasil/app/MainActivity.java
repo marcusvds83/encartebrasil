@@ -50,7 +50,7 @@ public class MainActivity extends Activity {
             settings.setAllowFileAccess(true);
             settings.setCacheMode(WebSettings.LOAD_DEFAULT);
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-            settings.setUserAgentString(settings.getUserAgentString() + " EncarteBrasilApp/1.0");
+            settings.setUserAgentString(settings.getUserAgentString() + " PanfletosBrasilApp/1.0");
             settings.setUseWideViewPort(true);
             settings.setLoadWithOverviewMode(true);
 

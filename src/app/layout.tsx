@@ -6,10 +6,10 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 export const viewport: Viewport = { width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false, themeColor: "#dc2626" };
 export const metadata: Metadata = {
-  title: "EncarteBrasil - Compare precos de encartes no Brasil",
+  title: "Panfletos Brasil - Compare precos de panfletos no Brasil",
   description: "Encontre os melhores precos em encartes de supermercados.",
   manifest: "/manifest.json",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "EncarteBrasil" },
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "Panfletos Brasil" },
 };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

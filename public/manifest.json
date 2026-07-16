@@ -1,6 +1,6 @@
 {
-  "name": "EncarteBrasil",
-  "short_name": "EncarteBrasil",
+  "name": "Panfletos Brasil",
+  "short_name": "Panfletos",
   "description": "Compare preços de encartes de supermercados",
   "start_url": "/",
   "display": "standalone",

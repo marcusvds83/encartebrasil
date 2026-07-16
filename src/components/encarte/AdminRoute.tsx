@@ -67,7 +67,7 @@ export default function AdminRoute() {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 gap-4">
-        <img src="/icon-192.png" alt="EncarteBrasil" className="h-20 w-20 rounded-2xl" />
+        <img src="/icon-192.png" alt="Panfletos Brasil" className="h-20 w-20 rounded-2xl" />
         <p className="text-sm text-gray-300">Carregando painel admin...</p>
       </div>
     )
@@ -80,7 +80,7 @@ export default function AdminRoute() {
         <header className="bg-gray-900 text-white sticky top-0 z-50 shadow-md">
           <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img src="/icon-192.png" alt="EncarteBrasil" className="h-8 w-8 rounded-lg" />
+              <img src="/icon-192.png" alt="Panfletos Brasil" className="h-8 w-8 rounded-lg" />
               <h1 className="text-lg font-bold">Painel Admin</h1>
               <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">
                 {session.email}
@@ -142,8 +142,8 @@ function AdminLogin({ onLogin }: { onLogin: () => void }) {
       <header className="bg-gray-950 text-white border-b border-gray-800">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/icon-192.png" alt="EncarteBrasil" className="h-8 w-8 rounded-lg" />
-            <h1 className="text-lg font-bold">EncarteBrasil — Admin</h1>
+            <img src="/icon-192.png" alt="Panfletos Brasil" className="h-8 w-8 rounded-lg" />
+            <h1 className="text-lg font-bold">Panfletos Brasil — Admin</h1>
           </div>
           <a href="/" className="text-xs text-gray-400 hover:text-white">← Voltar para o app</a>
         </div>
@@ -156,7 +156,7 @@ function AdminLogin({ onLogin }: { onLogin: () => void }) {
         >
           <div className="bg-white rounded-xl shadow-xl border border-gray-200 p-6">
             <div className="text-center mb-6">
-              <img src="/icon-192.png" alt="EncarteBrasil" className="h-16 w-16 rounded-2xl mx-auto mb-3 shadow-md" />
+              <img src="/icon-192.png" alt="Panfletos Brasil" className="h-16 w-16 rounded-2xl mx-auto mb-3 shadow-md" />
               <h2 className="text-lg font-bold text-gray-900">Painel Administrativo</h2>
               <p className="text-xs text-gray-500 mt-1">Acesso restrito.</p>
             </div>
@@ -165,7 +165,7 @@ function AdminLogin({ onLogin }: { onLogin: () => void }) {
                 <label className="text-sm font-medium text-gray-700">E-mail</label>
                 <input
                   type="email"
-                  placeholder="admin@encartebrasil.com"
+                  placeholder="admin@panfletosbrasil.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"

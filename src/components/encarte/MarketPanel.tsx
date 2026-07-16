@@ -322,10 +322,10 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
         <CardHeader className="text-center pb-2">
           <img
             src="/icon-192.png"
-            alt="EncarteBrasil"
+            alt="Panfletos Brasil"
             className="h-20 w-20 rounded-2xl object-cover mx-auto mb-3 shadow-md"
           />
-          <CardTitle className="text-lg">EncarteBrasil</CardTitle>
+          <CardTitle className="text-lg">Panfletos Brasil</CardTitle>
           <p className="text-xs text-gray-500 mt-1">
             Acesse para gerenciar e comparar encartes
           </p>

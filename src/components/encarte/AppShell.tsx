@@ -160,7 +160,7 @@ function EbLogo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   return (
     <img
       src="/icon-192.png"
-      alt="EncarteBrasil"
+      alt="Panfletos Brasil"
       className={cn('rounded-lg object-cover shrink-0 shadow-sm', sizes[size])}
     />
   )
@@ -290,7 +290,7 @@ export default function AppShell() {
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           src="/icon-192.png"
-          alt="EncarteBrasil"
+          alt="Panfletos Brasil"
           className="h-16 w-16 rounded-2xl mb-2"
         />
         <div className="mt-2">
@@ -327,7 +327,7 @@ export default function AppShell() {
               <div className="flex items-center gap-3">
                 <EbLogo size="sm" />
                 <div>
-                  <h1 className="text-lg font-bold leading-tight">EncarteBrasil</h1>
+                  <h1 className="text-lg font-bold leading-tight">Panfletos Brasil</h1>
                   <p className="text-[10px] opacity-90 leading-tight">
                     {tab === 'conta_mercado' ? 'Minha Conta' : 'Painel do Mercado'}
                   </p>
@@ -427,7 +427,7 @@ export default function AppShell() {
             <div className="flex items-center gap-3">
               <EbLogo size="sm" />
               <h1 className="text-lg font-bold tracking-tight">
-                EncarteBrasil
+                Panfletos Brasil
               </h1>
             </div>
 
