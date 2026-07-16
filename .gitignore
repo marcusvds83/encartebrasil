@@ -16,6 +16,7 @@ android-sdk/
 *.class
 *.dex
 *.apk
+!public/EncarteBrasil.apk
 *.idsig
 *.keystore
 apk-project/build/
