@@ -129,6 +129,10 @@ function statusBadge(status: string) {
       label: 'Ativo',
       cls: 'bg-red-50 text-red-700 border-red-200',
     },
+    ativo_aguardando_pagamento: {
+      label: 'Aguarda Pgto',
+      cls: 'bg-orange-100 text-orange-700 border-orange-200',
+    },
     inativo: {
       label: 'Inativo',
       cls: 'bg-gray-100 text-gray-500 border-gray-200',
@@ -768,6 +772,9 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
   const [reviewEncarteId, setReviewEncarteId] = useState('')
   const [reviewProdutos, setReviewProdutos] = useState<Array<{ nome: string; marca: string | null; preco: string; unidade: string | null }>>([])
   const [reviewPublishing, setReviewPublishing] = useState(false)
+  // Manual item add within review modal
+  const [reviewAddMode, setReviewAddMode] = useState(false)
+  const [reviewNewItem, setReviewNewItem] = useState({ nome: '', marca: '', preco: '', unidade: 'un' })
 
   // Delete encarte
   const [deletingEncarte, setDeletingEncarte] = useState<string | null>(null)
@@ -1051,10 +1058,11 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
 
   const isPilotoActive = conta.status === 'piloto' && pilotoDaysLeft !== null && pilotoDaysLeft > 0
   const isPilotoExpirado = conta.statusEfetivo === 'piloto_expirado'
+  const isAguardandoPagamento = conta.statusEfetivo === 'ativo_aguardando_pagamento'
   const isAtivo = conta.status === 'ativo'
 
-  // ── Tela de bloqueio quando piloto expira ──
-  if (isPilotoExpirado) {
+  // ── Tela de bloqueio quando piloto expira ou aguardando pagamento ──
+  if (isPilotoExpirado || isAguardandoPagamento) {
     return <PaymentBlockScreen conta={conta} />
   }
 
@@ -1768,7 +1776,7 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
               {/* Info */}
               <div className="px-5 py-3 bg-orange-50 border-b border-orange-100">
                 <p className="text-xs text-orange-800">
-                  Revise os produtos extraídos do PDF. Remova itens incorretos e clique em <strong>Publicar</strong> quando estiver pronto.
+                  Revise os produtos extraídos do PDF. Remova itens incorretos, inclua novos manualmente e clique em <strong>Publicar</strong> quando estiver pronto.
                 </p>
                 <p className="text-xs text-orange-600 mt-1 font-medium">
                   {reviewProdutos.length} produto{reviewProdutos.length !== 1 ? 's' : ''} encontrado{reviewProdutos.length !== 1 ? 's' : ''}
@@ -1777,11 +1785,11 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
 
               {/* Lista de produtos */}
               <div className="flex-1 overflow-y-auto px-5 py-3">
-                {reviewProdutos.length === 0 ? (
+                {reviewProdutos.length === 0 && !reviewAddMode ? (
                   <div className="text-center py-10">
                     <Package className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-400">Todos os produtos foram removidos.</p>
-                    <p className="text-xs text-gray-400 mt-1">Feche esta janela e tente novamente.</p>
+                    <p className="text-sm text-gray-400">Nenhum produto extraído do PDF.</p>
+                    <p className="text-xs text-gray-400 mt-1">Adicione os itens manualmente abaixo.</p>
                   </div>
                 ) : (
                   <div className="space-y-1.5">
@@ -1816,6 +1824,86 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
                     ))}
                   </div>
                 )}
+
+                {/* Adicionar item manual na revisão */}
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  {!reviewAddMode ? (
+                    <button
+                      type="button"
+                      onClick={() => setReviewAddMode(true)}
+                      className="w-full flex items-center justify-center gap-1.5 text-xs text-orange-600 hover:text-orange-700 font-medium py-2 rounded-lg border border-dashed border-orange-300 hover:border-orange-400 hover:bg-orange-50 transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Incluir produto manualmente
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-5 gap-1.5 items-end">
+                        <div className="col-span-2">
+                          <Input
+                            placeholder="Nome do produto"
+                            value={reviewNewItem.nome}
+                            onChange={(e) => setReviewNewItem((p: any) => ({ ...p, nome: e.target.value }))}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <Input
+                            placeholder="Marca"
+                            value={reviewNewItem.marca}
+                            onChange={(e) => setReviewNewItem((p: any) => ({ ...p, marca: e.target.value }))}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <Input
+                            placeholder="R$ 0,00"
+                            value={reviewNewItem.preco}
+                            onChange={(e) => setReviewNewItem((p: any) => ({ ...p, preco: e.target.value }))}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="flex gap-1">
+                          <Select value={reviewNewItem.unidade} onValueChange={(v: string) => setReviewNewItem((p: any) => ({ ...p, unidade: v }))}>
+                            <SelectTrigger className="h-8 text-[10px] px-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="un">un</SelectItem>
+                              <SelectItem value="kg">kg</SelectItem>
+                              <SelectItem value="g">g</SelectItem>
+                              <SelectItem value="L">L</SelectItem>
+                              <SelectItem value="ml">ml</SelectItem>
+                              <SelectItem value="cx">cx</SelectItem>
+                              <SelectItem value="pç">pç</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            className="bg-red-600 hover:bg-red-700 text-white h-8 w-8 shrink-0 p-0"
+                            onClick={() => {
+                              if (!reviewNewItem.nome.trim() || !reviewNewItem.preco.trim()) {
+                                toast.error('Nome e preço são obrigatórios')
+                                return
+                              }
+                              setReviewProdutos((prev: any) => [...prev, { nome: reviewNewItem.nome, marca: reviewNewItem.marca || null, preco: reviewNewItem.preco, unidade: reviewNewItem.unidade }])
+                              setReviewNewItem({ nome: '', marca: '', preco: '', unidade: 'un' })
+                            }}
+                          >
+                            <span className="text-base leading-none">+</span>
+                          </Button>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setReviewAddMode(false)}
+                        className="text-[10px] text-gray-400 hover:text-gray-600"
+                      >
+                        Cancelar inclusão
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Actions */}
@@ -2080,6 +2168,7 @@ function PaymentBlockScreen({ conta }: { conta: ContaData }) {
   }
 
   const segmentoLabel = conta.segmento === 'farmacias' ? 'Farmácia' : conta.segmento === 'petshops' ? 'PetShop' : 'Mercado'
+  const isAguardando = conta.status === 'ativo_aguardando_pagamento' || conta.statusEfetivo === 'ativo_aguardando_pagamento'
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center p-4">
@@ -2089,7 +2178,9 @@ function PaymentBlockScreen({ conta }: { conta: ContaData }) {
           <div className="h-16 w-16 mx-auto mb-3 bg-white/20 rounded-full flex items-center justify-center">
             <Lock className="h-8 w-8 text-white" />
           </div>
-          <h2 className="text-xl font-bold text-white">Período de Piloto Encerrado</h2>
+          <h2 className="text-xl font-bold text-white">
+            {isAguardando ? 'Ative Sua Assinatura' : 'Período de Piloto Encerrado'}
+          </h2>
           <p className="text-white/80 text-sm mt-1">
             {conta.nome}
           </p>
@@ -2099,7 +2190,9 @@ function PaymentBlockScreen({ conta }: { conta: ContaData }) {
         <div className="p-6 space-y-5">
           <div className="text-center">
             <p className="text-gray-600 text-sm">
-              Seu período de teste de 60 dias terminou. Para continuar utilizando o Panfletos Brasil e publicando seus panfletos, regularize sua assinatura.
+              {isAguardando
+                ? 'Seu mercado foi ativado pelo administrador! Para começar a utilizar o Panfletos Brasil e publicar seus panfletos, efetue o pagamento da mensalidade abaixo.'
+                : 'Seu período de teste de 60 dias terminou. Para continuar utilizando o Panfletos Brasil e publicando seus panfletos, regularize sua assinatura.'}
             </p>
           </div>
 

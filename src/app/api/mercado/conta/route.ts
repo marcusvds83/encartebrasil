@@ -23,6 +23,10 @@ export async function GET() {
     if (mercado.status === 'piloto' && mercado.pilotoFim && agora > mercado.pilotoFim) {
       statusEfetivo = 'piloto_expirado'
     }
+    // "ativo_aguardando_pagamento" também bloqueia as funcionalidades
+    if (mercado.status === 'ativo_aguardando_pagamento') {
+      statusEfetivo = 'ativo_aguardando_pagamento'
+    }
 
     // Encartes ativos (concluídos e não expirados)
     const todosEncartes = await db.encarte.findMany({ where: { mercadoId: mercado.id } })

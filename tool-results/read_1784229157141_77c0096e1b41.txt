@@ -1,0 +1,598 @@
+  1601→            </CardContent>
+  1602→          </Card>
+  1603→
+  1604→          {/* Pilot period */}
+  1605→          {isPilotoActive && (
+  1606→            <Card className="border-blue-200 bg-blue-50/50">
+  1607→              <CardContent className="p-4">
+  1608→                <div className="flex items-center gap-2 mb-2">
+  1609→                  <Calendar className="h-4 w-4 text-blue-600" />
+  1610→                  <p className="text-sm font-semibold text-blue-800">Período Piloto</p>
+  1611→                </div>
+  1612→                <p className="text-xs text-blue-700">
+  1613→                  Seu período piloto termina em <strong className="text-blue-900">{pilotoDaysLeft} dia{pilotoDaysLeft !== 1 ? 's' : ''}</strong>
+  1614→                  {conta.pilotoFim && (
+  1615→                    <> ({new Date(conta.pilotoFim).toLocaleDateString('pt-BR')})</>
+  1616→                  )}
+  1617→                </p>
+  1618→                {conta.pilotoInicio && (
+  1619→                  <p className="text-[10px] text-blue-500 mt-1">
+  1620→                    Início: {new Date(conta.pilotoInicio).toLocaleDateString('pt-BR')}
+  1621→                  </p>
+  1622→                )}
+  1623→              </CardContent>
+  1624→            </Card>
+  1625→          )}
+  1626→
+  1627→          {isPilotoExpirado && (
+  1628→            <Card className="border-orange-300 bg-orange-50">
+  1629→              <CardContent className="p-4 space-y-3">
+  1630→                <div className="flex items-center gap-2">
+  1631→                  <Calendar className="h-4 w-4 text-orange-600" />
+  1632→                  <p className="text-sm font-semibold text-orange-800">Período Piloto Expirado</p>
+  1633→                </div>
+  1634→                <p className="text-xs text-orange-700">
+  1635→                  Seu período piloto expirou! Para continuar usando a plataforma, você precisa assinar o contrato PJ e efetuar o pagamento mensal.
+  1636→                </p>
+  1637→                <Button
+  1638→                  variant="outline"
+  1639→                  size="sm"
+  1640→                  className="border-orange-300 text-orange-700 hover:bg-orange-100 text-xs"
+  1641→                  onClick={() => toast.info('Contrato PJ será disponibilizado em breve (integração com Asaas em andamento).')}
+  1642→                >
+  1643→                  <FileText className="h-3.5 w-3.5 mr-1.5" />
+  1644→                  Ver Contrato PJ
+  1645→                </Button>
+  1646→              </CardContent>
+  1647→            </Card>
+  1648→          )}
+  1649→
+  1650→          {isAtivo && (
+  1651→            <Card className="border-green-200 bg-green-50">
+  1652→              <CardContent className="p-4 space-y-3">
+  1653→                <div className="flex items-center gap-2">
+  1654→                  <CheckCircle className="h-4 w-4 text-green-600" />
+  1655→                  <p className="text-sm font-semibold text-green-800">Conta Ativa — contrato PJ assinado.</p>
+  1656→                </div>
+  1657→                <Button
+  1658→                  variant="outline"
+  1659→                  size="sm"
+  1660→                  className="border-green-300 text-green-700 hover:bg-green-100 text-xs"
+  1661→                  onClick={() => toast.info('Contrato PJ será disponibilizado em breve (integração com Asaas em andamento).')}
+  1662→                >
+  1663→                  <FileText className="h-3.5 w-3.5 mr-1.5" />
+  1664→                  Ver Contrato PJ
+  1665→                </Button>
+  1666→              </CardContent>
+  1667→            </Card>
+  1668→          )}
+  1669→
+  1670→          {/* Monthly fee */}
+  1671→          <Card className="border-gray-100">
+  1672→            <CardHeader className="pb-3 pt-4 px-4">
+  1673→              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1674→                <CreditCard className="h-4 w-4 text-red-600" />
+  1675→                Mensalidade
+  1676→              </CardTitle>
+  1677→            </CardHeader>
+  1678→            <CardContent className="px-4 pb-4">
+  1679→              <div className="flex items-center gap-3">
+  1680→                <span className={cn(
+  1681→                  'text-xl font-bold',
+  1682→                  (conta.statusEfetivo === 'piloto' || conta.status === 'piloto') && 'line-through text-gray-400'
+  1683→                )}>
+  1684→                  R$ {conta.mensalidade},00/mês
+  1685→                </span>
+  1686→                {(conta.statusEfetivo === 'piloto' || conta.status === 'piloto') && (
+  1687→                  <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">
+  1688→                    Isento durante o piloto
+  1689→                  </Badge>
+  1690→                )}
+  1691→              </div>
+  1692→            </CardContent>
+  1693→          </Card>
+  1694→        </TabsContent>
+  1695→
+  1696→        {/* ── Tab: Perfil ── */}
+  1697→        <TabsContent value="perfil" className="space-y-4 mt-4">
+  1698→          <Card className="border-gray-100">
+  1699→            <CardHeader className="pb-3 pt-4 px-4">
+  1700→              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1701→                <UserCircle className="h-4 w-4 text-red-600" />
+  1702→                Editar Perfil
+  1703→              </CardTitle>
+  1704→            </CardHeader>
+  1705→            <CardContent className="px-4 pb-4 space-y-4">
+  1706→              <div className="space-y-2">
+  1707→                <Label className="text-xs text-gray-600">Endereço</Label>
+  1708→                <Input
+  1709→                  placeholder="Rua, número, bairro..."
+  1710→                  value={perfilEndereco}
+  1711→                  onChange={(e) => setPerfilEndereco(e.target.value)}
+  1712→                  className="h-10"
+  1713→                />
+  1714→              </div>
+  1715→              <div className="space-y-2">
+  1716→                <Label className="text-xs text-gray-600">Telefone</Label>
+  1717→                <Input
+  1718→                  placeholder="(00) 00000-0000"
+  1719→                  value={perfilTelefone}
+  1720→                  onChange={(e) => setPerfilTelefone(e.target.value)}
+  1721→                  className="h-10"
+  1722→                />
+  1723→              </div>
+  1724→              <Button
+  1725→                className="w-full bg-red-600 hover:bg-red-700 text-white h-10 text-sm"
+  1726→                onClick={handleSavePerfil}
+  1727→                disabled={savingPerfil}
+  1728→              >
+  1729→                {savingPerfil ? (
+  1730→                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</>
+  1731→                ) : (
+  1732→                  <><Save className="h-4 w-4 mr-2" /> Salvar</>
+  1733→                )}
+  1734→              </Button>
+  1735→            </CardContent>
+  1736→          </Card>
+  1737→        </TabsContent>
+  1738→      </Tabs>
+  1739→
+  1740→      {/* ── Modal de Revisão Pós-Upload ── */}
+  1741→      <AnimatePresence>
+  1742→        {reviewOpen && (
+  1743→          <motion.div
+  1744→            initial={{ opacity: 0 }}
+  1745→            animate={{ opacity: 1 }}
+  1746→            exit={{ opacity: 0 }}
+  1747→            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4"
+  1748→            onClick={() => { if (!reviewPublishing) setReviewOpen(false) }}
+  1749→          >
+  1750→            <motion.div
+  1751→              initial={{ scale: 0.95, y: 20 }}
+  1752→              animate={{ scale: 1, y: 0 }}
+  1753→              exit={{ scale: 0.95, y: 20 }}
+  1754→              className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col"
+  1755→              onClick={(e) => e.stopPropagation()}
+  1756→            >
+  1757→              {/* Header */}
+  1758→              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+  1759→                <div className="flex items-center gap-2">
+  1760→                  <Eye className="h-5 w-5 text-orange-500" />
+  1761→                  <h3 className="text-base font-bold text-gray-800">Revisar Produtos</h3>
+  1762→                </div>
+  1763→                <button onClick={() => !reviewPublishing && setReviewOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
+  1764→                  <X className="h-5 w-5" />
+  1765→                </button>
+  1766→              </div>
+  1767→
+  1768→              {/* Info */}
+  1769→              <div className="px-5 py-3 bg-orange-50 border-b border-orange-100">
+  1770→                <p className="text-xs text-orange-800">
+  1771→                  Revise os produtos extraídos do PDF. Remova itens incorretos e clique em <strong>Publicar</strong> quando estiver pronto.
+  1772→                </p>
+  1773→                <p className="text-xs text-orange-600 mt-1 font-medium">
+  1774→                  {reviewProdutos.length} produto{reviewProdutos.length !== 1 ? 's' : ''} encontrado{reviewProdutos.length !== 1 ? 's' : ''}
+  1775→                </p>
+  1776→              </div>
+  1777→
+  1778→              {/* Lista de produtos */}
+  1779→              <div className="flex-1 overflow-y-auto px-5 py-3">
+  1780→                {reviewProdutos.length === 0 ? (
+  1781→                  <div className="text-center py-10">
+  1782→                    <Package className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+  1783→                    <p className="text-sm text-gray-400">Todos os produtos foram removidos.</p>
+  1784→                    <p className="text-xs text-gray-400 mt-1">Feche esta janela e tente novamente.</p>
+  1785→                  </div>
+  1786→                ) : (
+  1787→                  <div className="space-y-1.5">
+  1788→                    {reviewProdutos.map((p, idx) => (
+  1789→                      <motion.div
+  1790→                        key={idx}
+  1791→                        initial={{ opacity: 0, x: -8 }}
+  1792→                        animate={{ opacity: 1, x: 0 }}
+  1793→                        transition={{ delay: idx * 0.02 }}
+  1794→                        className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-100 hover:border-red-200 transition-colors group"
+  1795→                      >
+  1796→                        <div className="min-w-0 flex-1">
+  1797→                          <p className="text-sm font-medium truncate text-gray-800">
+  1798→                            {p.nome}
+  1799→                          </p>
+  1800→                          <div className="flex items-center gap-2 mt-0.5">
+  1801→                            {p.marca && <span className="text-[10px] text-gray-400">{p.marca}</span>}
+  1802→                            {p.unidade && <span className="text-[10px] text-blue-500">{p.unidade}</span>}
+  1803→                          </div>
+  1804→                        </div>
+  1805→                        <div className="flex items-center gap-2 shrink-0 ml-2">
+  1806→                          <span className="text-sm font-bold text-red-600">{p.preco}</span>
+  1807→                          <button
+  1808→                            onClick={() => removeReviewProduto(idx)}
+  1809→                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all p-1"
+  1810→                            title="Remover item"
+  1811→                          >
+  1812→                            <X className="h-4 w-4" />
+  1813→                          </button>
+  1814→                        </div>
+  1815→                      </motion.div>
+  1816→                    ))}
+  1817→                  </div>
+  1818→                )}
+  1819→              </div>
+  1820→
+  1821→              {/* Actions */}
+  1822→              <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+  1823→                <Button
+  1824→                  variant="outline"
+  1825→                  className="flex-1 h-10 text-sm"
+  1826→                  onClick={() => setReviewOpen(false)}
+  1827→                  disabled={reviewPublishing}
+  1828→                >
+  1829→                  Cancelar
+  1830→                </Button>
+  1831→                <Button
+  1832→                  className="flex-1 bg-red-600 hover:bg-red-700 text-white h-10 text-sm font-semibold"
+  1833→                  onClick={handlePublish}
+  1834→                  disabled={reviewPublishing || reviewProdutos.length === 0}
+  1835→                >
+  1836→                  {reviewPublishing ? (
+  1837→                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Publicando...</>
+  1838→                  ) : (
+  1839→                    <><CheckCircle className="h-4 w-4 mr-2" /> Publicar {reviewProdutos.length} produto{reviewProdutos.length !== 1 ? 's' : ''}</>
+  1840→                  )}
+  1841→                </Button>
+  1842→              </div>
+  1843→            </motion.div>
+  1844→          </motion.div>
+  1845→        )}
+  1846→      </AnimatePresence>
+  1847→
+  1848→      {/* ── Modal de Entrada Manual ── */}
+  1849→      <AnimatePresence>
+  1850→        {manualEntryOpen && (
+  1851→          <motion.div
+  1852→            initial={{ opacity: 0 }}
+  1853→            animate={{ opacity: 1 }}
+  1854→            exit={{ opacity: 0 }}
+  1855→            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4"
+  1856→            onClick={() => { if (!manualPublishing) setManualEntryOpen(false) }}
+  1857→          >
+  1858→            <motion.div
+  1859→              initial={{ scale: 0.95, y: 20 }}
+  1860→              animate={{ scale: 1, y: 0 }}
+  1861→              exit={{ scale: 0.95, y: 20 }}
+  1862→              className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col"
+  1863→              onClick={(e) => e.stopPropagation()}
+  1864→            >
+  1865→              {/* Header */}
+  1866→              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+  1867→                <div className="flex items-center gap-2">
+  1868→                  <Pencil className="h-5 w-5 text-orange-500" />
+  1869→                  <h3 className="text-base font-bold text-gray-800">Adicionar Itens Manualmente</h3>
+  1870→                </div>
+  1871→                <button onClick={() => !manualPublishing && setManualEntryOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
+  1872→                  <X className="h-5 w-5" />
+  1873→                </button>
+  1874→              </div>
+  1875→
+  1876→              {/* Form row */}
+  1877→              <div className="px-5 py-4 border-b border-gray-100">
+  1878→                <div className="grid grid-cols-5 gap-2 items-end">
+  1879→                  <div className="col-span-2">
+  1880→                    <Label className="text-[10px] text-gray-500 mb-1 block">Nome do produto</Label>
+  1881→                    <Input
+  1882→                      placeholder="Ex: Arroz"
+  1883→                      value={manualItem.nome}
+  1884→                      onChange={(e) => setManualItem((p) => ({ ...p, nome: e.target.value }))}
+  1885→                      className="h-9 text-sm"
+  1886→                    />
+  1887→                  </div>
+  1888→                  <div>
+  1889→                    <Label className="text-[10px] text-gray-500 mb-1 block">Marca</Label>
+  1890→                    <Input
+  1891→                      placeholder="Marca"
+  1892→                      value={manualItem.marca}
+  1893→                      onChange={(e) => setManualItem((p) => ({ ...p, marca: e.target.value }))}
+  1894→                      className="h-9 text-sm"
+  1895→                    />
+  1896→                  </div>
+  1897→                  <div>
+  1898→                    <Label className="text-[10px] text-gray-500 mb-1 block">Preço (R$)</Label>
+  1899→                    <Input
+  1900→                      placeholder="0,00"
+  1901→                      value={manualItem.preco}
+  1902→                      onChange={(e) => setManualItem((p) => ({ ...p, preco: e.target.value }))}
+  1903→                      className="h-9 text-sm"
+  1904→                    />
+  1905→                  </div>
+  1906→                  <div className="flex gap-1">
+  1907→                    <div className="flex-1">
+  1908→                      <Label className="text-[10px] text-gray-500 mb-1 block">Un.</Label>
+  1909→                      <Select value={manualItem.unidade} onValueChange={(v) => setManualItem((p) => ({ ...p, unidade: v }))}>
+  1910→                        <SelectTrigger className="h-9 text-xs px-1">
+  1911→                          <SelectValue />
+  1912→                        </SelectTrigger>
+  1913→                        <SelectContent>
+  1914→                          <SelectItem value="un">un</SelectItem>
+  1915→                          <SelectItem value="kg">kg</SelectItem>
+  1916→                          <SelectItem value="g">g</SelectItem>
+  1917→                          <SelectItem value="L">L</SelectItem>
+  1918→                          <SelectItem value="ml">ml</SelectItem>
+  1919→                          <SelectItem value="cx">cx</SelectItem>
+  1920→                          <SelectItem value="pç">pç</SelectItem>
+  1921→                        </SelectContent>
+  1922→                      </Select>
+  1923→                    </div>
+  1924→                    <Button
+  1925→                      type="button"
+  1926→                      className="bg-red-600 hover:bg-red-700 text-white h-9 w-9 shrink-0 p-0"
+  1927→                      onClick={handleAddManualItem}
+  1928→                    >
+  1929→                      <span className="text-lg leading-none">+</span>
+  1930→                    </Button>
+  1931→                  </div>
+  1932→                </div>
+  1933→              </div>
+  1934→
+  1935→              {/* Lista de itens adicionados */}
+  1936→              <div className="flex-1 overflow-y-auto px-5 py-3">
+  1937→                {manualItens.length === 0 ? (
+  1938→                  <div className="text-center py-10">
+  1939→                    <Package className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+  1940→                    <p className="text-sm text-gray-400">Nenhum item adicionado ainda.</p>
+  1941→                    <p className="text-xs text-gray-400 mt-1">Preencha os campos acima e clique em <strong>+</strong>.</p>
+  1942→                  </div>
+  1943→                ) : (
+  1944→                  <div className="space-y-1.5">
+  1945→                    <p className="text-xs text-gray-500 font-medium mb-2">
+  1946→                      {manualItens.length} item{manualItens.length !== 1 ? 's' : ''} adicionado{manualItens.length !== 1 ? 's' : ''}
+  1947→                    </p>
+  1948→                    {manualItens.map((item, idx) => (
+  1949→                      <motion.div
+  1950→                        key={idx}
+  1951→                        initial={{ opacity: 0, x: -8 }}
+  1952→                        animate={{ opacity: 1, x: 0 }}
+  1953→                        transition={{ delay: idx * 0.02 }}
+  1954→                        className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-100 hover:border-red-200 transition-colors group"
+  1955→                      >
+  1956→                        <div className="min-w-0 flex-1">
+  1957→                          <p className="text-sm font-medium truncate text-gray-800">{item.nome}</p>
+  1958→                          <div className="flex items-center gap-2 mt-0.5">
+  1959→                            {item.marca && <span className="text-[10px] text-gray-400">{item.marca}</span>}
+  1960→                            <span className="text-[10px] text-blue-500">{item.unidade}</span>
+  1961→                          </div>
+  1962→                        </div>
+  1963→                        <div className="flex items-center gap-2 shrink-0 ml-2">
+  1964→                          <span className="text-sm font-bold text-red-600">R$ {item.preco}</span>
+  1965→                          <button
+  1966→                            onClick={() => handleRemoveManualItem(idx)}
+  1967→                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all p-1"
+  1968→                            title="Remover item"
+  1969→                          >
+  1970→                            <X className="h-4 w-4" />
+  1971→                          </button>
+  1972→                        </div>
+  1973→                      </motion.div>
+  1974→                    ))}
+  1975→                  </div>
+  1976→                )}
+  1977→              </div>
+  1978→
+  1979→              {/* Actions */}
+  1980→              <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+  1981→                <Button
+  1982→                  variant="outline"
+  1983→                  className="flex-1 h-10 text-sm"
+  1984→                  onClick={() => setManualEntryOpen(false)}
+  1985→                  disabled={manualPublishing}
+  1986→                >
+  1987→                  Cancelar
+  1988→                </Button>
+  1989→                <Button
+  1990→                  className="flex-1 bg-red-600 hover:bg-red-700 text-white h-10 text-sm font-semibold"
+  1991→                  onClick={handlePublishManual}
+  1992→                  disabled={manualPublishing || manualItens.length === 0}
+  1993→                >
+  1994→                  {manualPublishing ? (
+  1995→                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Publicando...</>
+  1996→                  ) : (
+  1997→                    <><CheckCircle className="h-4 w-4 mr-2" /> Publicar Encarte</>
+  1998→                  )}
+  1999→                </Button>
+  2000→              </div>
+  2001→            </motion.div>
+  2002→          </motion.div>
+  2003→        )}
+  2004→      </AnimatePresence>
+  2005→    </div>
+  2006→  )
+  2007→}
+  2008→
+  2009→// ── MarketPanel ─────────────────────────────────────────────────────────────
+  2010→
+  2011→interface MarketPanelProps {
+  2012→  onLogout: () => void
+  2013→  onLogin: () => void
+  2014→}
+  2015→
+  2016→export default function MarketPanel({ onLogout, onLogin }: MarketPanelProps) {
+  2017→  const session = useSession()
+  2018→  const [conta, setConta] = useState<ContaData | null>(null)
+  2019→  const [dataFetched, setDataFetched] = useState(false)
+  2020→  const loading = session?.tipo === 'mercado' ? !dataFetched : false
+  2021→
+  2022→  useEffect(() => {
+  2023→    if (session?.tipo !== 'mercado') return
+  2024→    let cancelled = false
+  2025→    api<ContaData>('/api/mercado/conta')
+  2026→      .then((d) => {
+  2027→        if (!cancelled) setConta(d)
+  2028→      })
+  2029→      .catch(() => {})
+  2030→      .finally(() => {
+  2031→        if (!cancelled) setDataFetched(true)
+  2032→      })
+  2033→    return () => {
+  2034→      cancelled = true
+  2035→    }
+  2036→  }, [session])
+  2037→
+  2038→  if (loading) {
+  2039→    return (
+  2040→      <div className="space-y-4">
+  2041→        <Skeleton className="h-8 w-48" />
+  2042→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  2043→          {Array.from({ length: 4 }).map((_, i) => (
+  2044→            <Skeleton key={i} className="h-24 rounded-xl" />
+  2045→          ))}
+  2046→        </div>
+  2047→        <Skeleton className="h-48 rounded-xl" />
+  2048→      </div>
+  2049→    )
+  2050→  }
+  2051→
+  2052→  if (session?.tipo !== 'mercado' || !conta) {
+  2053→    return <LoginForm onLogin={onLogin} />
+  2054→  }
+  2055→
+  2056→  return <Dashboard conta={conta} onLogout={onLogout} />
+  2057→}
+  2058→
+  2059→// ── Tela de Bloqueio / Pagamento Asaas ──────────────────────────────────────
+  2060→
+  2061→function PaymentBlockScreen({ conta }: { conta: ContaData }) {
+  2062→  const [loading, setLoading] = useState(false)
+  2063→  const [paymentData, setPaymentData] = useState<any>(null)
+  2064→  const [error, setError] = useState('')
+  2065→
+  2066→  const handlePay = async (tipo: 'PIX' | 'BOLETO') => {
+  2067→    setLoading(true)
+  2068→    setError('')
+  2069→    try {
+  2070→      const res = await api('/api/asaas/checkout', {
+  2071→        method: 'POST',
+  2072→        body: JSON.stringify({ billingType: tipo }),
+  2073→      })
+  2074→      setPaymentData(res)
+  2075→    } catch (err: any) {
+  2076→      setError(err?.message || 'Erro ao gerar pagamento')
+  2077→    } finally {
+  2078→      setLoading(false)
+  2079→    }
+  2080→  }
+  2081→
+  2082→  const segmentoLabel = conta.segmento === 'farmacias' ? 'Farmácia' : conta.segmento === 'petshops' ? 'PetShop' : 'Mercado'
+  2083→
+  2084→  return (
+  2085→    <div className="min-h-[60vh] flex items-center justify-center p-4">
+  2086→      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+  2087→        {/* Header */}
+  2088→        <div className="bg-gradient-to-r from-red-600 to-orange-500 p-6 text-center">
+  2089→          <div className="h-16 w-16 mx-auto mb-3 bg-white/20 rounded-full flex items-center justify-center">
+  2090→            <Lock className="h-8 w-8 text-white" />
+  2091→          </div>
+  2092→          <h2 className="text-xl font-bold text-white">Período de Piloto Encerrado</h2>
+  2093→          <p className="text-white/80 text-sm mt-1">
+  2094→            {conta.nome}
+  2095→          </p>
+  2096→        </div>
+  2097→
+  2098→        {/* Body */}
+  2099→        <div className="p-6 space-y-5">
+  2100→          <div className="text-center">
+  2101→            <p className="text-gray-600 text-sm">
+  2102→              Seu período de teste de 60 dias terminou. Para continuar utilizando o Panfletos Brasil e publicando seus panfletos, regularize sua assinatura.
+  2103→            </p>
+  2104→          </div>
+  2105→
+  2106→          {/* Valor */}
+  2107→          <div className="bg-gray-50 rounded-xl p-4 text-center">
+  2108→            <p className="text-xs text-gray-500 uppercase tracking-wide">Mensalidade — {segmentoLabel}</p>
+  2109→            <p className="text-3xl font-bold text-gray-800 mt-1">
+  2110→              R$ {conta.mensalidade || 399},00
+  2111→            </p>
+  2112→            <p className="text-xs text-gray-400 mt-1">/mês</p>
+  2113→          </div>
+  2114→
+  2115→          {/* Payment result */}
+  2116→          {paymentData && (
+  2117→            <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-3">
+  2118→              <p className="text-green-700 text-sm font-medium text-center">
+  2119→                Pagamento gerado com sucesso!
+  2120→              </p>
+  2121→              {paymentData.billingType === 'PIX' && paymentData.pixQrCode && (
+  2122→                <div className="text-center space-y-2">
+  2123→                  <p className="text-xs text-gray-500">Escaneie o QR Code PIX:</p>
+  2124→                  <img
+  2125→                    src={`data:image/png;base64,${paymentData.pixEncodedImage}`}
+  2126→                    alt="QR Code PIX"
+  2127→                    className="w-48 h-48 mx-auto rounded-lg"
+  2128→                  />
+  2129→                  <p className="text-[10px] text-gray-400 break-all">{paymentData.pixQrCode}</p>
+  2130→                </div>
+  2131→              )}
+  2132→              {paymentData.billingType === 'BOLETO' && paymentData.bankSlipUrl && (
+  2133→                <div className="text-center">
+  2134→                  <a
+  2135→                    href={paymentData.bankSlipUrl}
+  2136→                    target="_blank"
+  2137→                    rel="noopener noreferrer"
+  2138→                    className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+  2139→                  >
+  2140→                    <FileText className="h-4 w-4" />
+  2141→                    Abrir Boleto Bancário
+  2142→                  </a>
+  2143→                </div>
+  2144→              )}
+  2145→              <a
+  2146→                href={paymentData.invoiceUrl}
+  2147→                target="_blank"
+  2148→                rel="noopener noreferrer"
+  2149→                className="block text-center text-sm text-blue-600 hover:underline"
+  2150→              >
+  2151→                Ver fatura completa no Asaas
+  2152→              </a>
+  2153→            </div>
+  2154→          )}
+  2155→
+  2156→          {error && (
+  2157→            <p className="text-red-600 text-sm text-center bg-red-50 p-2 rounded-lg">{error}</p>
+  2158→          )}
+  2159→
+  2160→          {/* Botões de pagamento */}
+  2161→          {!paymentData && (
+  2162→            <div className="grid grid-cols-2 gap-3">
+  2163→              <button
+  2164→                onClick={() => handlePay('PIX')}
+  2165→                disabled={loading}
+  2166→                className="flex flex-col items-center gap-2 p-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl transition-colors font-medium"
+  2167→              >
+  2168→                <QrCode className="h-6 w-6" />
+  2169→                <span className="text-sm">Pagar via PIX</span>
+  2170→              </button>
+  2171→              <button
+  2172→                onClick={() => handlePay('BOLETO')}
+  2173→                disabled={loading}
+  2174→                className="flex flex-col items-center gap-2 p-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors font-medium"
+  2175→              >
+  2176→                <FileText className="h-6 w-6" />
+  2177→                <span className="text-sm">Pagar via Boleto</span>
+  2178→              </button>
+  2179→            </div>
+  2180→          )}
+  2181→
+  2182→          {paymentData && (
+  2183→            <button
+  2184→              onClick={() => setPaymentData(null)}
+  2185→              className="w-full text-center text-sm text-gray-500 hover:text-gray-700 py-2"
+  2186→            >
+  2187→              Gerar outro pagamento
+  2188→            </button>
+  2189→          )}
+  2190→
+  2191→          <p className="text-[10px] text-gray-400 text-center">
+  2192→            Após a confirmação do pagamento, seu acesso será liberado automaticamente.
+  2193→          </p>
+  2194→        </div>
+  2195→      </div>
+  2196→    </div>
+  2197→  )
+  2198→}

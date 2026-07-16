@@ -91,6 +91,10 @@ function statusBadge(status: string) {
       label: 'Ativo',
       cls: 'bg-red-50 text-red-700 border-red-200',
     },
+    ativo_aguardando_pagamento: {
+      label: 'Aguarda Pgto',
+      cls: 'bg-orange-100 text-orange-700 border-orange-200',
+    },
     inativo: {
       label: 'Inativo',
       cls: 'bg-gray-100 text-gray-500 border-gray-200',
@@ -116,13 +120,13 @@ function statusLabel(status: string): string {
 
 function nextStatusAction(current: string): string {
   if (current === 'piloto') return 'ativo'
-  if (current === 'ativo') return 'inativo'
+  if (current === 'ativo' || current === 'ativo_aguardando_pagamento') return 'inativo'
   return 'piloto'
 }
 
 function nextStatusLabel(current: string): string {
   if (current === 'piloto') return 'Ativar'
-  if (current === 'ativo') return 'Desativar'
+  if (current === 'ativo' || current === 'ativo_aguardando_pagamento') return 'Desativar'
   return 'Piloto'
 }
 

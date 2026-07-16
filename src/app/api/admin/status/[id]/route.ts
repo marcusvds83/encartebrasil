@@ -16,8 +16,26 @@ export async function POST(
     const validStatuses = ['piloto', 'ativo', 'inativo', 'suspenso']
     if (!validStatuses.includes(status)) return NextResponse.json({ erro: 'Status inválido' }, { status: 400 })
 
-    const updated = await db.mercado.update(id, { status })
-    return NextResponse.json({ ok: true, status: (updated as any)?.status || status })
+    // Quando admin ativa um mercado que estava em piloto ou piloto_expirado,
+    // marca como "ativo_aguardando_pagamento" para forçar a tela de pagamento
+    let effectiveStatus = status
+    if (status === 'ativo') {
+      const mercadoAtual = await db.mercado.findUnique({ where: { id } })
+      const mAtual = mercadoAtual as any
+      const precisaPagar = (
+        mAtual.status === 'piloto' ||
+        mAtual.status === 'piloto_expirado' ||
+        mAtual.status === 'ativo_aguardando_pagamento' ||
+        !mAtual.ultimoPagamento
+      )
+      if (precisaPagar) {
+        effectiveStatus = 'ativo_aguardando_pagamento'
+        console.log(`[admin status] mercado ${id} ativado mas aguardando pagamento`)
+      }
+    }
+
+    const updated = await db.mercado.update(id, { status: effectiveStatus })
+    return NextResponse.json({ ok: true, status: (updated as any)?.status || effectiveStatus, statusOriginal: status })
   } catch {
     return NextResponse.json({ erro: 'Erro ao alterar status' }, { status: 500 })
   }

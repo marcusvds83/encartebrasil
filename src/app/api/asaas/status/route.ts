@@ -23,7 +23,9 @@ export async function GET() {
     const m = mercado as any
     const statusEfetivo = m.status === 'piloto' && m.pilotoFim && new Date(m.pilotoFim) < new Date()
       ? 'piloto_expirado'
-      : m.status
+      : m.status === 'ativo_aguardando_pagamento'
+        ? 'ativo_aguardando_pagamento'
+        : m.status
 
     // Se tem pagamento pendente, verifica status no Asaas
     let paymentStatus = null

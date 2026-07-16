@@ -1,0 +1,599 @@
+     1→  1600→              </div>
+     2→  1601→            </CardContent>
+     3→  1602→          </Card>
+     4→  1603→
+     5→  1604→          {/* Pilot period */}
+     6→  1605→          {isPilotoActive && (
+     7→  1606→            <Card className="border-blue-200 bg-blue-50/50">
+     8→  1607→              <CardContent className="p-4">
+     9→  1608→                <div className="flex items-center gap-2 mb-2">
+    10→  1609→                  <Calendar className="h-4 w-4 text-blue-600" />
+    11→  1610→                  <p className="text-sm font-semibold text-blue-800">Período Piloto</p>
+    12→  1611→                </div>
+    13→  1612→                <p className="text-xs text-blue-700">
+    14→  1613→                  Seu período piloto termina em <strong className="text-blue-900">{pilotoDaysLeft} dia{pilotoDaysLeft !== 1 ? 's' : ''}</strong>
+    15→  1614→                  {conta.pilotoFim && (
+    16→  1615→                    <> ({new Date(conta.pilotoFim).toLocaleDateString('pt-BR')})</>
+    17→  1616→                  )}
+    18→  1617→                </p>
+    19→  1618→                {conta.pilotoInicio && (
+    20→  1619→                  <p className="text-[10px] text-blue-500 mt-1">
+    21→  1620→                    Início: {new Date(conta.pilotoInicio).toLocaleDateString('pt-BR')}
+    22→  1621→                  </p>
+    23→  1622→                )}
+    24→  1623→              </CardContent>
+    25→  1624→            </Card>
+    26→  1625→          )}
+    27→  1626→
+    28→  1627→          {isPilotoExpirado && (
+    29→  1628→            <Card className="border-orange-300 bg-orange-50">
+    30→  1629→              <CardContent className="p-4 space-y-3">
+    31→  1630→                <div className="flex items-center gap-2">
+    32→  1631→                  <Calendar className="h-4 w-4 text-orange-600" />
+    33→  1632→                  <p className="text-sm font-semibold text-orange-800">Período Piloto Expirado</p>
+    34→  1633→                </div>
+    35→  1634→                <p className="text-xs text-orange-700">
+    36→  1635→                  Seu período piloto expirou! Para continuar usando a plataforma, você precisa assinar o contrato PJ e efetuar o pagamento mensal.
+    37→  1636→                </p>
+    38→  1637→                <Button
+    39→  1638→                  variant="outline"
+    40→  1639→                  size="sm"
+    41→  1640→                  className="border-orange-300 text-orange-700 hover:bg-orange-100 text-xs"
+    42→  1641→                  onClick={() => toast.info('Contrato PJ será disponibilizado em breve (integração com Asaas em andamento).')}
+    43→  1642→                >
+    44→  1643→                  <FileText className="h-3.5 w-3.5 mr-1.5" />
+    45→  1644→                  Ver Contrato PJ
+    46→  1645→                </Button>
+    47→  1646→              </CardContent>
+    48→  1647→            </Card>
+    49→  1648→          )}
+    50→  1649→
+    51→  1650→          {isAtivo && (
+    52→  1651→            <Card className="border-green-200 bg-green-50">
+    53→  1652→              <CardContent className="p-4 space-y-3">
+    54→  1653→                <div className="flex items-center gap-2">
+    55→  1654→                  <CheckCircle className="h-4 w-4 text-green-600" />
+    56→  1655→                  <p className="text-sm font-semibold text-green-800">Conta Ativa — contrato PJ assinado.</p>
+    57→  1656→                </div>
+    58→  1657→                <Button
+    59→  1658→                  variant="outline"
+    60→  1659→                  size="sm"
+    61→  1660→                  className="border-green-300 text-green-700 hover:bg-green-100 text-xs"
+    62→  1661→                  onClick={() => toast.info('Contrato PJ será disponibilizado em breve (integração com Asaas em andamento).')}
+    63→  1662→                >
+    64→  1663→                  <FileText className="h-3.5 w-3.5 mr-1.5" />
+    65→  1664→                  Ver Contrato PJ
+    66→  1665→                </Button>
+    67→  1666→              </CardContent>
+    68→  1667→            </Card>
+    69→  1668→          )}
+    70→  1669→
+    71→  1670→          {/* Monthly fee */}
+    72→  1671→          <Card className="border-gray-100">
+    73→  1672→            <CardHeader className="pb-3 pt-4 px-4">
+    74→  1673→              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+    75→  1674→                <CreditCard className="h-4 w-4 text-red-600" />
+    76→  1675→                Mensalidade
+    77→  1676→              </CardTitle>
+    78→  1677→            </CardHeader>
+    79→  1678→            <CardContent className="px-4 pb-4">
+    80→  1679→              <div className="flex items-center gap-3">
+    81→  1680→                <span className={cn(
+    82→  1681→                  'text-xl font-bold',
+    83→  1682→                  (conta.statusEfetivo === 'piloto' || conta.status === 'piloto') && 'line-through text-gray-400'
+    84→  1683→                )}>
+    85→  1684→                  R$ {conta.mensalidade},00/mês
+    86→  1685→                </span>
+    87→  1686→                {(conta.statusEfetivo === 'piloto' || conta.status === 'piloto') && (
+    88→  1687→                  <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">
+    89→  1688→                    Isento durante o piloto
+    90→  1689→                  </Badge>
+    91→  1690→                )}
+    92→  1691→              </div>
+    93→  1692→            </CardContent>
+    94→  1693→          </Card>
+    95→  1694→        </TabsContent>
+    96→  1695→
+    97→  1696→        {/* ── Tab: Perfil ── */}
+    98→  1697→        <TabsContent value="perfil" className="space-y-4 mt-4">
+    99→  1698→          <Card className="border-gray-100">
+   100→  1699→            <CardHeader className="pb-3 pt-4 px-4">
+   101→  1700→              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   102→  1701→                <UserCircle className="h-4 w-4 text-red-600" />
+   103→  1702→                Editar Perfil
+   104→  1703→              </CardTitle>
+   105→  1704→            </CardHeader>
+   106→  1705→            <CardContent className="px-4 pb-4 space-y-4">
+   107→  1706→              <div className="space-y-2">
+   108→  1707→                <Label className="text-xs text-gray-600">Endereço</Label>
+   109→  1708→                <Input
+   110→  1709→                  placeholder="Rua, número, bairro..."
+   111→  1710→                  value={perfilEndereco}
+   112→  1711→                  onChange={(e) => setPerfilEndereco(e.target.value)}
+   113→  1712→                  className="h-10"
+   114→  1713→                />
+   115→  1714→              </div>
+   116→  1715→              <div className="space-y-2">
+   117→  1716→                <Label className="text-xs text-gray-600">Telefone</Label>
+   118→  1717→                <Input
+   119→  1718→                  placeholder="(00) 00000-0000"
+   120→  1719→                  value={perfilTelefone}
+   121→  1720→                  onChange={(e) => setPerfilTelefone(e.target.value)}
+   122→  1721→                  className="h-10"
+   123→  1722→                />
+   124→  1723→              </div>
+   125→  1724→              <Button
+   126→  1725→                className="w-full bg-red-600 hover:bg-red-700 text-white h-10 text-sm"
+   127→  1726→                onClick={handleSavePerfil}
+   128→  1727→                disabled={savingPerfil}
+   129→  1728→              >
+   130→  1729→                {savingPerfil ? (
+   131→  1730→                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</>
+   132→  1731→                ) : (
+   133→  1732→                  <><Save className="h-4 w-4 mr-2" /> Salvar</>
+   134→  1733→                )}
+   135→  1734→              </Button>
+   136→  1735→            </CardContent>
+   137→  1736→          </Card>
+   138→  1737→        </TabsContent>
+   139→  1738→      </Tabs>
+   140→  1739→
+   141→  1740→      {/* ── Modal de Revisão Pós-Upload ── */}
+   142→  1741→      <AnimatePresence>
+   143→  1742→        {reviewOpen && (
+   144→  1743→          <motion.div
+   145→  1744→            initial={{ opacity: 0 }}
+   146→  1745→            animate={{ opacity: 1 }}
+   147→  1746→            exit={{ opacity: 0 }}
+   148→  1747→            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4"
+   149→  1748→            onClick={() => { if (!reviewPublishing) setReviewOpen(false) }}
+   150→  1749→          >
+   151→  1750→            <motion.div
+   152→  1751→              initial={{ scale: 0.95, y: 20 }}
+   153→  1752→              animate={{ scale: 1, y: 0 }}
+   154→  1753→              exit={{ scale: 0.95, y: 20 }}
+   155→  1754→              className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col"
+   156→  1755→              onClick={(e) => e.stopPropagation()}
+   157→  1756→            >
+   158→  1757→              {/* Header */}
+   159→  1758→              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+   160→  1759→                <div className="flex items-center gap-2">
+   161→  1760→                  <Eye className="h-5 w-5 text-orange-500" />
+   162→  1761→                  <h3 className="text-base font-bold text-gray-800">Revisar Produtos</h3>
+   163→  1762→                </div>
+   164→  1763→                <button onClick={() => !reviewPublishing && setReviewOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
+   165→  1764→                  <X className="h-5 w-5" />
+   166→  1765→                </button>
+   167→  1766→              </div>
+   168→  1767→
+   169→  1768→              {/* Info */}
+   170→  1769→              <div className="px-5 py-3 bg-orange-50 border-b border-orange-100">
+   171→  1770→                <p className="text-xs text-orange-800">
+   172→  1771→                  Revise os produtos extraídos do PDF. Remova itens incorretos e clique em <strong>Publicar</strong> quando estiver pronto.
+   173→  1772→                </p>
+   174→  1773→                <p className="text-xs text-orange-600 mt-1 font-medium">
+   175→  1774→                  {reviewProdutos.length} produto{reviewProdutos.length !== 1 ? 's' : ''} encontrado{reviewProdutos.length !== 1 ? 's' : ''}
+   176→  1775→                </p>
+   177→  1776→              </div>
+   178→  1777→
+   179→  1778→              {/* Lista de produtos */}
+   180→  1779→              <div className="flex-1 overflow-y-auto px-5 py-3">
+   181→  1780→                {reviewProdutos.length === 0 ? (
+   182→  1781→                  <div className="text-center py-10">
+   183→  1782→                    <Package className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+   184→  1783→                    <p className="text-sm text-gray-400">Todos os produtos foram removidos.</p>
+   185→  1784→                    <p className="text-xs text-gray-400 mt-1">Feche esta janela e tente novamente.</p>
+   186→  1785→                  </div>
+   187→  1786→                ) : (
+   188→  1787→                  <div className="space-y-1.5">
+   189→  1788→                    {reviewProdutos.map((p, idx) => (
+   190→  1789→                      <motion.div
+   191→  1790→                        key={idx}
+   192→  1791→                        initial={{ opacity: 0, x: -8 }}
+   193→  1792→                        animate={{ opacity: 1, x: 0 }}
+   194→  1793→                        transition={{ delay: idx * 0.02 }}
+   195→  1794→                        className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-100 hover:border-red-200 transition-colors group"
+   196→  1795→                      >
+   197→  1796→                        <div className="min-w-0 flex-1">
+   198→  1797→                          <p className="text-sm font-medium truncate text-gray-800">
+   199→  1798→                            {p.nome}
+   200→  1799→                          </p>
+   201→  1800→                          <div className="flex items-center gap-2 mt-0.5">
+   202→  1801→                            {p.marca && <span className="text-[10px] text-gray-400">{p.marca}</span>}
+   203→  1802→                            {p.unidade && <span className="text-[10px] text-blue-500">{p.unidade}</span>}
+   204→  1803→                          </div>
+   205→  1804→                        </div>
+   206→  1805→                        <div className="flex items-center gap-2 shrink-0 ml-2">
+   207→  1806→                          <span className="text-sm font-bold text-red-600">{p.preco}</span>
+   208→  1807→                          <button
+   209→  1808→                            onClick={() => removeReviewProduto(idx)}
+   210→  1809→                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all p-1"
+   211→  1810→                            title="Remover item"
+   212→  1811→                          >
+   213→  1812→                            <X className="h-4 w-4" />
+   214→  1813→                          </button>
+   215→  1814→                        </div>
+   216→  1815→                      </motion.div>
+   217→  1816→                    ))}
+   218→  1817→                  </div>
+   219→  1818→                )}
+   220→  1819→              </div>
+   221→  1820→
+   222→  1821→              {/* Actions */}
+   223→  1822→              <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+   224→  1823→                <Button
+   225→  1824→                  variant="outline"
+   226→  1825→                  className="flex-1 h-10 text-sm"
+   227→  1826→                  onClick={() => setReviewOpen(false)}
+   228→  1827→                  disabled={reviewPublishing}
+   229→  1828→                >
+   230→  1829→                  Cancelar
+   231→  1830→                </Button>
+   232→  1831→                <Button
+   233→  1832→                  className="flex-1 bg-red-600 hover:bg-red-700 text-white h-10 text-sm font-semibold"
+   234→  1833→                  onClick={handlePublish}
+   235→  1834→                  disabled={reviewPublishing || reviewProdutos.length === 0}
+   236→  1835→                >
+   237→  1836→                  {reviewPublishing ? (
+   238→  1837→                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Publicando...</>
+   239→  1838→                  ) : (
+   240→  1839→                    <><CheckCircle className="h-4 w-4 mr-2" /> Publicar {reviewProdutos.length} produto{reviewProdutos.length !== 1 ? 's' : ''}</>
+   241→  1840→                  )}
+   242→  1841→                </Button>
+   243→  1842→              </div>
+   244→  1843→            </motion.div>
+   245→  1844→          </motion.div>
+   246→  1845→        )}
+   247→  1846→      </AnimatePresence>
+   248→  1847→
+   249→  1848→      {/* ── Modal de Entrada Manual ── */}
+   250→  1849→      <AnimatePresence>
+   251→  1850→        {manualEntryOpen && (
+   252→  1851→          <motion.div
+   253→  1852→            initial={{ opacity: 0 }}
+   254→  1853→            animate={{ opacity: 1 }}
+   255→  1854→            exit={{ opacity: 0 }}
+   256→  1855→            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4"
+   257→  1856→            onClick={() => { if (!manualPublishing) setManualEntryOpen(false) }}
+   258→  1857→          >
+   259→  1858→            <motion.div
+   260→  1859→              initial={{ scale: 0.95, y: 20 }}
+   261→  1860→              animate={{ scale: 1, y: 0 }}
+   262→  1861→              exit={{ scale: 0.95, y: 20 }}
+   263→  1862→              className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col"
+   264→  1863→              onClick={(e) => e.stopPropagation()}
+   265→  1864→            >
+   266→  1865→              {/* Header */}
+   267→  1866→              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+   268→  1867→                <div className="flex items-center gap-2">
+   269→  1868→                  <Pencil className="h-5 w-5 text-orange-500" />
+   270→  1869→                  <h3 className="text-base font-bold text-gray-800">Adicionar Itens Manualmente</h3>
+   271→  1870→                </div>
+   272→  1871→                <button onClick={() => !manualPublishing && setManualEntryOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
+   273→  1872→                  <X className="h-5 w-5" />
+   274→  1873→                </button>
+   275→  1874→              </div>
+   276→  1875→
+   277→  1876→              {/* Form row */}
+   278→  1877→              <div className="px-5 py-4 border-b border-gray-100">
+   279→  1878→                <div className="grid grid-cols-5 gap-2 items-end">
+   280→  1879→                  <div className="col-span-2">
+   281→  1880→                    <Label className="text-[10px] text-gray-500 mb-1 block">Nome do produto</Label>
+   282→  1881→                    <Input
+   283→  1882→                      placeholder="Ex: Arroz"
+   284→  1883→                      value={manualItem.nome}
+   285→  1884→                      onChange={(e) => setManualItem((p) => ({ ...p, nome: e.target.value }))}
+   286→  1885→                      className="h-9 text-sm"
+   287→  1886→                    />
+   288→  1887→                  </div>
+   289→  1888→                  <div>
+   290→  1889→                    <Label className="text-[10px] text-gray-500 mb-1 block">Marca</Label>
+   291→  1890→                    <Input
+   292→  1891→                      placeholder="Marca"
+   293→  1892→                      value={manualItem.marca}
+   294→  1893→                      onChange={(e) => setManualItem((p) => ({ ...p, marca: e.target.value }))}
+   295→  1894→                      className="h-9 text-sm"
+   296→  1895→                    />
+   297→  1896→                  </div>
+   298→  1897→                  <div>
+   299→  1898→                    <Label className="text-[10px] text-gray-500 mb-1 block">Preço (R$)</Label>
+   300→  1899→                    <Input
+   301→  1900→                      placeholder="0,00"
+   302→  1901→                      value={manualItem.preco}
+   303→  1902→                      onChange={(e) => setManualItem((p) => ({ ...p, preco: e.target.value }))}
+   304→  1903→                      className="h-9 text-sm"
+   305→  1904→                    />
+   306→  1905→                  </div>
+   307→  1906→                  <div className="flex gap-1">
+   308→  1907→                    <div className="flex-1">
+   309→  1908→                      <Label className="text-[10px] text-gray-500 mb-1 block">Un.</Label>
+   310→  1909→                      <Select value={manualItem.unidade} onValueChange={(v) => setManualItem((p) => ({ ...p, unidade: v }))}>
+   311→  1910→                        <SelectTrigger className="h-9 text-xs px-1">
+   312→  1911→                          <SelectValue />
+   313→  1912→                        </SelectTrigger>
+   314→  1913→                        <SelectContent>
+   315→  1914→                          <SelectItem value="un">un</SelectItem>
+   316→  1915→                          <SelectItem value="kg">kg</SelectItem>
+   317→  1916→                          <SelectItem value="g">g</SelectItem>
+   318→  1917→                          <SelectItem value="L">L</SelectItem>
+   319→  1918→                          <SelectItem value="ml">ml</SelectItem>
+   320→  1919→                          <SelectItem value="cx">cx</SelectItem>
+   321→  1920→                          <SelectItem value="pç">pç</SelectItem>
+   322→  1921→                        </SelectContent>
+   323→  1922→                      </Select>
+   324→  1923→                    </div>
+   325→  1924→                    <Button
+   326→  1925→                      type="button"
+   327→  1926→                      className="bg-red-600 hover:bg-red-700 text-white h-9 w-9 shrink-0 p-0"
+   328→  1927→                      onClick={handleAddManualItem}
+   329→  1928→                    >
+   330→  1929→                      <span className="text-lg leading-none">+</span>
+   331→  1930→                    </Button>
+   332→  1931→                  </div>
+   333→  1932→                </div>
+   334→  1933→              </div>
+   335→  1934→
+   336→  1935→              {/* Lista de itens adicionados */}
+   337→  1936→              <div className="flex-1 overflow-y-auto px-5 py-3">
+   338→  1937→                {manualItens.length === 0 ? (
+   339→  1938→                  <div className="text-center py-10">
+   340→  1939→                    <Package className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+   341→  1940→                    <p className="text-sm text-gray-400">Nenhum item adicionado ainda.</p>
+   342→  1941→                    <p className="text-xs text-gray-400 mt-1">Preencha os campos acima e clique em <strong>+</strong>.</p>
+   343→  1942→                  </div>
+   344→  1943→                ) : (
+   345→  1944→                  <div className="space-y-1.5">
+   346→  1945→                    <p className="text-xs text-gray-500 font-medium mb-2">
+   347→  1946→                      {manualItens.length} item{manualItens.length !== 1 ? 's' : ''} adicionado{manualItens.length !== 1 ? 's' : ''}
+   348→  1947→                    </p>
+   349→  1948→                    {manualItens.map((item, idx) => (
+   350→  1949→                      <motion.div
+   351→  1950→                        key={idx}
+   352→  1951→                        initial={{ opacity: 0, x: -8 }}
+   353→  1952→                        animate={{ opacity: 1, x: 0 }}
+   354→  1953→                        transition={{ delay: idx * 0.02 }}
+   355→  1954→                        className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-100 hover:border-red-200 transition-colors group"
+   356→  1955→                      >
+   357→  1956→                        <div className="min-w-0 flex-1">
+   358→  1957→                          <p className="text-sm font-medium truncate text-gray-800">{item.nome}</p>
+   359→  1958→                          <div className="flex items-center gap-2 mt-0.5">
+   360→  1959→                            {item.marca && <span className="text-[10px] text-gray-400">{item.marca}</span>}
+   361→  1960→                            <span className="text-[10px] text-blue-500">{item.unidade}</span>
+   362→  1961→                          </div>
+   363→  1962→                        </div>
+   364→  1963→                        <div className="flex items-center gap-2 shrink-0 ml-2">
+   365→  1964→                          <span className="text-sm font-bold text-red-600">R$ {item.preco}</span>
+   366→  1965→                          <button
+   367→  1966→                            onClick={() => handleRemoveManualItem(idx)}
+   368→  1967→                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all p-1"
+   369→  1968→                            title="Remover item"
+   370→  1969→                          >
+   371→  1970→                            <X className="h-4 w-4" />
+   372→  1971→                          </button>
+   373→  1972→                        </div>
+   374→  1973→                      </motion.div>
+   375→  1974→                    ))}
+   376→  1975→                  </div>
+   377→  1976→                )}
+   378→  1977→              </div>
+   379→  1978→
+   380→  1979→              {/* Actions */}
+   381→  1980→              <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+   382→  1981→                <Button
+   383→  1982→                  variant="outline"
+   384→  1983→                  className="flex-1 h-10 text-sm"
+   385→  1984→                  onClick={() => setManualEntryOpen(false)}
+   386→  1985→                  disabled={manualPublishing}
+   387→  1986→                >
+   388→  1987→                  Cancelar
+   389→  1988→                </Button>
+   390→  1989→                <Button
+   391→  1990→                  className="flex-1 bg-red-600 hover:bg-red-700 text-white h-10 text-sm font-semibold"
+   392→  1991→                  onClick={handlePublishManual}
+   393→  1992→                  disabled={manualPublishing || manualItens.length === 0}
+   394→  1993→                >
+   395→  1994→                  {manualPublishing ? (
+   396→  1995→                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Publicando...</>
+   397→  1996→                  ) : (
+   398→  1997→                    <><CheckCircle className="h-4 w-4 mr-2" /> Publicar Encarte</>
+   399→  1998→                  )}
+   400→  1999→                </Button>
+   401→  2000→              </div>
+   402→  2001→            </motion.div>
+   403→  2002→          </motion.div>
+   404→  2003→        )}
+   405→  2004→      </AnimatePresence>
+   406→  2005→    </div>
+   407→  2006→  )
+   408→  2007→}
+   409→  2008→
+   410→  2009→// ── MarketPanel ─────────────────────────────────────────────────────────────
+   411→  2010→
+   412→  2011→interface MarketPanelProps {
+   413→  2012→  onLogout: () => void
+   414→  2013→  onLogin: () => void
+   415→  2014→}
+   416→  2015→
+   417→  2016→export default function MarketPanel({ onLogout, onLogin }: MarketPanelProps) {
+   418→  2017→  const session = useSession()
+   419→  2018→  const [conta, setConta] = useState<ContaData | null>(null)
+   420→  2019→  const [dataFetched, setDataFetched] = useState(false)
+   421→  2020→  const loading = session?.tipo === 'mercado' ? !dataFetched : false
+   422→  2021→
+   423→  2022→  useEffect(() => {
+   424→  2023→    if (session?.tipo !== 'mercado') return
+   425→  2024→    let cancelled = false
+   426→  2025→    api<ContaData>('/api/mercado/conta')
+   427→  2026→      .then((d) => {
+   428→  2027→        if (!cancelled) setConta(d)
+   429→  2028→      })
+   430→  2029→      .catch(() => {})
+   431→  2030→      .finally(() => {
+   432→  2031→        if (!cancelled) setDataFetched(true)
+   433→  2032→      })
+   434→  2033→    return () => {
+   435→  2034→      cancelled = true
+   436→  2035→    }
+   437→  2036→  }, [session])
+   438→  2037→
+   439→  2038→  if (loading) {
+   440→  2039→    return (
+   441→  2040→      <div className="space-y-4">
+   442→  2041→        <Skeleton className="h-8 w-48" />
+   443→  2042→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   444→  2043→          {Array.from({ length: 4 }).map((_, i) => (
+   445→  2044→            <Skeleton key={i} className="h-24 rounded-xl" />
+   446→  2045→          ))}
+   447→  2046→        </div>
+   448→  2047→        <Skeleton className="h-48 rounded-xl" />
+   449→  2048→      </div>
+   450→  2049→    )
+   451→  2050→  }
+   452→  2051→
+   453→  2052→  if (session?.tipo !== 'mercado' || !conta) {
+   454→  2053→    return <LoginForm onLogin={onLogin} />
+   455→  2054→  }
+   456→  2055→
+   457→  2056→  return <Dashboard conta={conta} onLogout={onLogout} />
+   458→  2057→}
+   459→  2058→
+   460→  2059→// ── Tela de Bloqueio / Pagamento Asaas ──────────────────────────────────────
+   461→  2060→
+   462→  2061→function PaymentBlockScreen({ conta }: { conta: ContaData }) {
+   463→  2062→  const [loading, setLoading] = useState(false)
+   464→  2063→  const [paymentData, setPaymentData] = useState<any>(null)
+   465→  2064→  const [error, setError] = useState('')
+   466→  2065→
+   467→  2066→  const handlePay = async (tipo: 'PIX' | 'BOLETO') => {
+   468→  2067→    setLoading(true)
+   469→  2068→    setError('')
+   470→  2069→    try {
+   471→  2070→      const res = await api('/api/asaas/checkout', {
+   472→  2071→        method: 'POST',
+   473→  2072→        body: JSON.stringify({ billingType: tipo }),
+   474→  2073→      })
+   475→  2074→      setPaymentData(res)
+   476→  2075→    } catch (err: any) {
+   477→  2076→      setError(err?.message || 'Erro ao gerar pagamento')
+   478→  2077→    } finally {
+   479→  2078→      setLoading(false)
+   480→  2079→    }
+   481→  2080→  }
+   482→  2081→
+   483→  2082→  const segmentoLabel = conta.segmento === 'farmacias' ? 'Farmácia' : conta.segmento === 'petshops' ? 'PetShop' : 'Mercado'
+   484→  2083→
+   485→  2084→  return (
+   486→  2085→    <div className="min-h-[60vh] flex items-center justify-center p-4">
+   487→  2086→      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+   488→  2087→        {/* Header */}
+   489→  2088→        <div className="bg-gradient-to-r from-red-600 to-orange-500 p-6 text-center">
+   490→  2089→          <div className="h-16 w-16 mx-auto mb-3 bg-white/20 rounded-full flex items-center justify-center">
+   491→  2090→            <Lock className="h-8 w-8 text-white" />
+   492→  2091→          </div>
+   493→  2092→          <h2 className="text-xl font-bold text-white">Período de Piloto Encerrado</h2>
+   494→  2093→          <p className="text-white/80 text-sm mt-1">
+   495→  2094→            {conta.nome}
+   496→  2095→          </p>
+   497→  2096→        </div>
+   498→  2097→
+   499→  2098→        {/* Body */}
+   500→  2099→        <div className="p-6 space-y-5">
+   501→  2100→          <div className="text-center">
+   502→  2101→            <p className="text-gray-600 text-sm">
+   503→  2102→              Seu período de teste de 60 dias terminou. Para continuar utilizando o Panfletos Brasil e publicando seus panfletos, regularize sua assinatura.
+   504→  2103→            </p>
+   505→  2104→          </div>
+   506→  2105→
+   507→  2106→          {/* Valor */}
+   508→  2107→          <div className="bg-gray-50 rounded-xl p-4 text-center">
+   509→  2108→            <p className="text-xs text-gray-500 uppercase tracking-wide">Mensalidade — {segmentoLabel}</p>
+   510→  2109→            <p className="text-3xl font-bold text-gray-800 mt-1">
+   511→  2110→              R$ {conta.mensalidade || 399},00
+   512→  2111→            </p>
+   513→  2112→            <p className="text-xs text-gray-400 mt-1">/mês</p>
+   514→  2113→          </div>
+   515→  2114→
+   516→  2115→          {/* Payment result */}
+   517→  2116→          {paymentData && (
+   518→  2117→            <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-3">
+   519→  2118→              <p className="text-green-700 text-sm font-medium text-center">
+   520→  2119→                Pagamento gerado com sucesso!
+   521→  2120→              </p>
+   522→  2121→              {paymentData.billingType === 'PIX' && paymentData.pixQrCode && (
+   523→  2122→                <div className="text-center space-y-2">
+   524→  2123→                  <p className="text-xs text-gray-500">Escaneie o QR Code PIX:</p>
+   525→  2124→                  <img
+   526→  2125→                    src={`data:image/png;base64,${paymentData.pixEncodedImage}`}
+   527→  2126→                    alt="QR Code PIX"
+   528→  2127→                    className="w-48 h-48 mx-auto rounded-lg"
+   529→  2128→                  />
+   530→  2129→                  <p className="text-[10px] text-gray-400 break-all">{paymentData.pixQrCode}</p>
+   531→  2130→                </div>
+   532→  2131→              )}
+   533→  2132→              {paymentData.billingType === 'BOLETO' && paymentData.bankSlipUrl && (
+   534→  2133→                <div className="text-center">
+   535→  2134→                  <a
+   536→  2135→                    href={paymentData.bankSlipUrl}
+   537→  2136→                    target="_blank"
+   538→  2137→                    rel="noopener noreferrer"
+   539→  2138→                    className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+   540→  2139→                  >
+   541→  2140→                    <FileText className="h-4 w-4" />
+   542→  2141→                    Abrir Boleto Bancário
+   543→  2142→                  </a>
+   544→  2143→                </div>
+   545→  2144→              )}
+   546→  2145→              <a
+   547→  2146→                href={paymentData.invoiceUrl}
+   548→  2147→                target="_blank"
+   549→  2148→                rel="noopener noreferrer"
+   550→  2149→                className="block text-center text-sm text-blue-600 hover:underline"
+   551→  2150→              >
+   552→  2151→                Ver fatura completa no Asaas
+   553→  2152→              </a>
+   554→  2153→            </div>
+   555→  2154→          )}
+   556→  2155→
+   557→  2156→          {error && (
+   558→  2157→            <p className="text-red-600 text-sm text-center bg-red-50 p-2 rounded-lg">{error}</p>
+   559→  2158→          )}
+   560→  2159→
+   561→  2160→          {/* Botões de pagamento */}
+   562→  2161→          {!paymentData && (
+   563→  2162→            <div className="grid grid-cols-2 gap-3">
+   564→  2163→              <button
+   565→  2164→                onClick={() => handlePay('PIX')}
+   566→  2165→                disabled={loading}
+   567→  2166→                className="flex flex-col items-center gap-2 p-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl transition-colors font-medium"
+   568→  2167→              >
+   569→  2168→                <QrCode className="h-6 w-6" />
+   570→  2169→                <span className="text-sm">Pagar via PIX</span>
+   571→  2170→              </button>
+   572→  2171→              <button
+   573→  2172→                onClick={() => handlePay('BOLETO')}
+   574→  2173→                disabled={loading}
+   575→  2174→                className="flex flex-col items-center gap-2 p-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors font-medium"
+   576→  2175→              >
+   577→  2176→                <FileText className="h-6 w-6" />
+   578→  2177→                <span className="text-sm">Pagar via Boleto</span>
+   579→  2178→              </button>
+   580→  2179→            </div>
+   581→  2180→          )}
+   582→  2181→
+   583→  2182→          {paymentData && (
+   584→  2183→            <button
+   585→  2184→              onClick={() => setPaymentData(null)}
+   586→  2185→              className="w-full text-center text-sm text-gray-500 hover:text-gray-700 py-2"
+   587→  2186→            >
+   588→  2187→              Gerar outro pagamento
+   589→  2188→            </button>
+   590→  2189→          )}
+   591→  2190→
+   592→  2191→          <p className="text-[10px] text-gray-400 text-center">
+   593→  2192→            Após a confirmação do pagamento, seu acesso será liberado automaticamente.
+   594→  2193→          </p>
+   595→  2194→        </div>
+   596→  2195→      </div>
+   597→  2196→    </div>
+   598→  2197→  )
+   599→  2198→}
