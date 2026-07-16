@@ -99,10 +99,12 @@ export async function POST(req: NextRequest) {
     // Envia para Odoo Helpdesk via webhook
     try {
       const odooPayload = {
-        partner_id: tipo === 'mercado' ? 'MERCADO' : 'CONSUMIDOR',
+        name: assunto,
+        team_id: tipo === 'mercado' ? 2 : 1,
         partner_phone: telefone || '',
         x_studio_contato_do_mercado_1: msgNome,
         x_studio_related_email_1: msgEmail,
+        x_studio_related_name_1: msgNome,
         description: descricao,
         x_studio_categoria: categoria,
       }
