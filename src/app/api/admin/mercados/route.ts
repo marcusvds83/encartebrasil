@@ -11,7 +11,16 @@ export async function GET() {
     const withCounts = await Promise.all(mercados.map(async (m: any) => {
       const totalProdutos = await db.produto.count({ where: { mercadoId: m.id } })
       const totalCliques = await db.cliqueProduto.count({ where: { mercadoId: m.id } })
-      return { ...m, totalProdutos, totalEncartes: m.totalEncartes || 0, totalCliques, _count: { produtos: totalProdutos, encartes: m.totalEncartes || 0, cliques: totalCliques } }
+      return {
+        ...m,
+        totalProdutos,
+        totalEncartes: m.totalEncartes || 0,
+        totalCliques,
+        asaasSubscriptionId: m.asaasSubscriptionId || null,
+        asaasAssinaturaCancelada: m.asaasAssinaturaCancelada || false,
+        ultimoPagamento: m.ultimoPagamento || null,
+        _count: { produtos: totalProdutos, encartes: m.totalEncartes || 0, cliques: totalCliques },
+      }
     }))
 
     return NextResponse.json(withCounts)

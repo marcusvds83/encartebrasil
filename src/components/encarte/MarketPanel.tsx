@@ -79,6 +79,11 @@ interface ContaData {
   endereco?: string | null
   telefone?: string | null
   segmento?: string | null
+  asaasSubscriptionId?: string | null
+  asaasAssinaturaCancelada?: boolean
+  ultimoPagamento?: string | null
+  ultimoPagamentoValor?: number | null
+  dataFimAcesso?: string | null
 }
 
 interface BITopProduto {
@@ -132,6 +137,14 @@ function statusBadge(status: string) {
     ativo_aguardando_pagamento: {
       label: 'Aguarda Pgto',
       cls: 'bg-orange-100 text-orange-700 border-orange-200',
+    },
+    ativo_carencia: {
+      label: 'Carência',
+      cls: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+    },
+    assinatura_cancelada: {
+      label: 'Cancelado',
+      cls: 'bg-red-100 text-red-700 border-red-200',
     },
     inativo: {
       label: 'Inativo',
@@ -1059,10 +1072,11 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
   const isPilotoActive = conta.status === 'piloto' && pilotoDaysLeft !== null && pilotoDaysLeft > 0
   const isPilotoExpirado = conta.statusEfetivo === 'piloto_expirado'
   const isAguardandoPagamento = conta.statusEfetivo === 'ativo_aguardando_pagamento'
+  const isAssinaturaCancelada = conta.statusEfetivo === 'assinatura_cancelada'
   const isAtivo = conta.status === 'ativo'
 
-  // ── Tela de bloqueio quando piloto expira ou aguardando pagamento ──
-  if (isPilotoExpirado || isAguardandoPagamento) {
+  // ── Tela de bloqueio quando piloto expira, aguardando pagamento ou assinatura cancelada ──
+  if (isPilotoExpirado || isAguardandoPagamento || isAssinaturaCancelada) {
     return <PaymentBlockScreen conta={conta} />
   }
 
@@ -1680,10 +1694,10 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
             <CardHeader className="pb-3 pt-4 px-4">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <CreditCard className="h-4 w-4 text-red-600" />
-                Mensalidade
+                Assinatura
               </CardTitle>
             </CardHeader>
-            <CardContent className="px-4 pb-4">
+            <CardContent className="px-4 pb-4 space-y-3">
               <div className="flex items-center gap-3">
                 <span className={cn(
                   'text-xl font-bold',
@@ -1696,7 +1710,79 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
                     Isento durante o piloto
                   </Badge>
                 )}
+                {conta.status === 'ativo' && !conta.asaasAssinaturaCancelada && conta.asaasSubscriptionId && (
+                  <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">
+                    Recorrente ativo
+                  </Badge>
+                )}
               </div>
+
+              {/* Status da assinatura */}
+              {conta.status === 'ativo' && conta.asaasSubscriptionId && (
+                <div className="text-xs text-gray-500 space-y-1">
+                  <p>Assinatura recorrente: <span className="font-medium text-gray-700">Ativa</span></p>
+                  {conta.ultimoPagamento && (
+                    <p>Último pagamento: {new Date(conta.ultimoPagamento).toLocaleDateString('pt-BR')}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Carência */}
+              {conta.statusEfetivo === 'ativo_carencia' && conta.dataFimAcesso && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-yellow-600 shrink-0" />
+                    <p className="text-xs font-semibold text-yellow-800">Período de Carência</p>
+                  </div>
+                  <p className="text-xs text-yellow-700">
+                    Sua assinatura foi cancelada. Você ainda tem acesso até <strong>{new Date(conta.dataFimAcesso).toLocaleDateString('pt-BR')}</strong>.
+                  </p>
+                  <Button
+                    size="sm"
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white h-8 text-xs"
+                    onClick={async () => {
+                      if (!confirm('Deseja reativar sua assinatura recorrente?')) return
+                      try {
+                        await api('/api/asaas/cancelar', { method: 'POST' })
+                        // Reativa: limpa flag de cancelamento e força nova assinatura
+                        await api('/api/mercado/reativar-assinatura', { method: 'POST' })
+                        toast.success('Assinatura reativada! Faça login novamente.')
+                        window.location.reload()
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : 'Erro ao reativar')
+                      }
+                    }}
+                  >
+                    Reativar Assinatura
+                  </Button>
+                </div>
+              )}
+
+              {/* Botão cancelar assinatura */}
+              {conta.status === 'ativo' && !conta.asaasAssinaturaCancelada && conta.asaasSubscriptionId && (
+                <div className="pt-1 border-t border-gray-100">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-red-200 text-red-600 hover:bg-red-50 text-xs h-9"
+                    onClick={async () => {
+                      if (!confirm('Tem certeza que deseja cancelar sua assinatura? Você ainda terá acesso por 30 dias após o último pagamento.')) return
+                      try {
+                        await api('/api/asaas/cancelar', { method: 'POST' })
+                        toast.success('Assinatura cancelada. Acesso mantido por 30 dias.')
+                        window.location.reload()
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : 'Erro ao cancelar')
+                      }
+                    }}
+                  >
+                    Cancelar Assinatura
+                  </Button>
+                  <p className="text-[10px] text-gray-400 mt-1.5">
+                    Ao cancelar, você mantém acesso por 30 dias após o último pagamento.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -2169,6 +2255,7 @@ function PaymentBlockScreen({ conta }: { conta: ContaData }) {
 
   const segmentoLabel = conta.segmento === 'farmacias' ? 'Farmácia' : conta.segmento === 'petshops' ? 'PetShop' : 'Mercado'
   const isAguardando = conta.status === 'ativo_aguardando_pagamento' || conta.statusEfetivo === 'ativo_aguardando_pagamento'
+  const isCancelado = conta.statusEfetivo === 'assinatura_cancelada'
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center p-4">
@@ -2179,7 +2266,7 @@ function PaymentBlockScreen({ conta }: { conta: ContaData }) {
             <Lock className="h-8 w-8 text-white" />
           </div>
           <h2 className="text-xl font-bold text-white">
-            {isAguardando ? 'Ative Sua Assinatura' : 'Período de Piloto Encerrado'}
+            {isCancelado ? 'Assinatura Encerrada' : isAguardando ? 'Ative Sua Assinatura' : 'Período de Piloto Encerrado'}
           </h2>
           <p className="text-white/80 text-sm mt-1">
             {conta.nome}
@@ -2190,9 +2277,11 @@ function PaymentBlockScreen({ conta }: { conta: ContaData }) {
         <div className="p-6 space-y-5">
           <div className="text-center">
             <p className="text-gray-600 text-sm">
-              {isAguardando
-                ? 'Seu mercado foi ativado pelo administrador! Para começar a utilizar o Panfletos Brasil e publicar seus panfletos, efetue o pagamento da mensalidade abaixo.'
-                : 'Seu período de teste de 60 dias terminou. Para continuar utilizando o Panfletos Brasil e publicando seus panfletos, regularize sua assinatura.'}
+              {isCancelado
+                ? 'Sua assinatura foi cancelada e o período de carência acabou. Para voltar a utilizar o Panfletos Brasil, assine novamente.'
+                : isAguardando
+                  ? 'Seu mercado foi ativado pelo administrador! Para começar a utilizar o Panfletos Brasil e publicar seus panfletos, efetue o pagamento da mensalidade abaixo.'
+                  : 'Seu período de teste de 60 dias terminou. Para continuar utilizando o Panfletos Brasil e publicando seus panfletos, regularize sua assinatura.'}
             </p>
           </div>
 

@@ -2,16 +2,16 @@
  * Panfletos Brasil — Integração Asaas (Gateway de Pagamento)
  *
  * API Docs: https://docs.asaas.com/docs/api
- * Sandbox: https://sandbox.asaas.com
  * Produção: https://api.asaas.com
  *
  * Fluxo:
- * 1. Mercado termina piloto → status efetivo = "piloto_expirado"
+ * 1. Mercado termina piloto → status = "ativo_aguardando_pagamento"
  * 2. App mostra tela de bloqueio com opção de pagamento
  * 3. Cria customer no Asaas (se não existir)
- * 4. Cria pagamento (PIX ou Boleto)
- * 5. Redireciona para checkout do Asaas
- * 6. Webhook do Asaas confirma pagamento → status muda para "ativo"
+ * 4. Cria assinatura recorrente mensal (Subscription)
+ * 5. Asaas gera faturas automaticamente todo mês
+ * 6. Webhook confirma pagamento → status muda para "ativo"
+ * 7. Mercado pode cancelar → 30 dias de carência após último pagamento
  */
 
 const ASAAS_BASE = 'https://api.asaas.com/v3'
@@ -52,11 +52,9 @@ export async function createOrUpdateCustomer(data: {
   phone?: string
   externalReference: string
 }): Promise<AsaasCustomer> {
-  // Tenta buscar por externalReference primeiro
   try {
     const existing = await asaasFetch(`/customers?externalReference=${data.externalReference}&limit=1`)
     if (existing.data?.length > 0) {
-      // Atualiza dados existentes
       const updated = await asaasFetch(`/customers/${existing.data[0].id}`, {
         method: 'PUT',
         body: JSON.stringify({
@@ -86,7 +84,73 @@ export async function createOrUpdateCustomer(data: {
   return customer
 }
 
-// ── Pagamento ────────────────────────────────────────────────────────────────
+// ── Assinatura (Subscription) Recorrente ──────────────────────────────────────
+
+export interface AsaasSubscription {
+  id: string
+  customer: string
+  billingType: 'PIX' | 'BOLETO'
+  value: number
+  nextDueDate: string
+  cycle: string
+  status: string // 'ACTIVE', 'INACTIVE', 'CANCELED', 'OVERDUE'
+  description: string
+  externalReference?: string
+  endDate?: string
+}
+
+export async function createSubscription(params: {
+  customerId: string
+  value: number
+  billingType: 'PIX' | 'BOLETO'
+  description: string
+  externalReference: string
+  nextDueDate?: string
+}): Promise<AsaasSubscription> {
+  const nextDueDate = params.nextDueDate || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+  const subscription = await asaasFetch('/subscriptions', {
+    method: 'POST',
+    body: JSON.stringify({
+      customer: params.customerId,
+      billingType: params.billingType,
+      value: params.value,
+      cycle: 'MONTHLY',
+      nextDueDate,
+      description: params.description,
+      externalReference: params.externalReference,
+      // Não envia endDate → recorrente infinito até cancelar
+    }),
+  })
+
+  console.log(`[asaas] assinatura criada: ${subscription.id} — ${params.billingType} — R$ ${params.value}/mês`)
+  return subscription
+}
+
+export async function getSubscription(subscriptionId: string): Promise<AsaasSubscription> {
+  return asaasFetch(`/subscriptions/${subscriptionId}`)
+}
+
+export async function cancelSubscription(subscriptionId: string): Promise<AsaasSubscription> {
+  const result = await asaasFetch(`/subscriptions/${subscriptionId}/cancel`, {
+    method: 'POST',
+  })
+  console.log(`[asaas] assinatura cancelada: ${subscriptionId}`)
+  return result
+}
+
+export async function deleteSubscription(subscriptionId: string): Promise<void> {
+  await asaasFetch(`/subscriptions/${subscriptionId}`, { method: 'DELETE' })
+  console.log(`[asaas] assinatura deletada: ${subscriptionId}`)
+}
+
+/** Busca a última fatura (payment) de uma assinatura */
+export async function getSubscriptionPayments(subscriptionId: string): Promise<any[]> {
+  const result = await asaasFetch(`/subscriptions/${subscriptionId}/payments?limit=10&order=desc`)
+  return result.data || []
+}
+
+// ── Pagamento único (mantido para compatibilidade) ───────────────────────────
 
 export interface AsaasPayment {
   id: string
@@ -99,36 +163,9 @@ export interface AsaasPayment {
   pixEncodedImage?: string
   bankSlipUrl?: string
   dueDate: string
+  subscription?: string
   externalReference?: string
   description: string
-}
-
-export async function createPayment(params: {
-  customerId: string
-  value: number
-  billingType: 'PIX' | 'BOLETO'
-  description: string
-  externalReference: string
-  dueDate?: string
-}): Promise<AsaasPayment> {
-  const dueDate = params.dueDate || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-
-  const payment = await asaasFetch('/payments', {
-    method: 'POST',
-    body: JSON.stringify({
-      customer: params.customerId,
-      value: params.value,
-      billingType: params.billingType,
-      description: params.description,
-      externalReference: params.externalReference,
-      dueDate,
-      // PIX já fica disponível imediatamente
-      ...(params.billingType === 'PIX' ? { installmentCount: 1 } : {}),
-    }),
-  })
-
-  console.log(`[asaas] pagamento criado: ${payment.id} — ${params.billingType} — R$ ${params.value}`)
-  return payment
 }
 
 export async function getPayment(paymentId: string): Promise<AsaasPayment> {
@@ -136,20 +173,16 @@ export async function getPayment(paymentId: string): Promise<AsaasPayment> {
 }
 
 export async function getPaymentByExternalRef(externalRef: string): Promise<AsaasPayment[]> {
-  const result = await asaasFetch(`/payments?externalReference=${externalRef}`)
+  const result = await asaasFetch(`/payments?externalReference=${externalRef}&limit=5&order=desc`)
   return result.data || []
 }
 
 // ── Webhook helpers ──────────────────────────────────────────────────────────
 
-/**
- * Verifica se o webhook do Asaas é autêntico.
- * O Asaas envia eventos via POST para a URL configurada.
- */
 export function parseWebhookEvent(body: any): { event: string; payment: AsaasPayment } | null {
   if (!body?.event || !body?.payment?.id) return null
   return {
-    event: body.event, // 'PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', etc.
+    event: body.event,
     payment: body.payment,
   }
 }
@@ -162,6 +195,9 @@ export async function handlePaymentConfirmation(body: any): Promise<{ ok: boolea
   }
 
   const { event, payment } = parsed
+
+  // Log todos os eventos para debug
+  console.log(`[asaas webhook] evento: ${event} | payment: ${payment.id} | status: ${payment.status}`)
 
   // Só processa pagamentos confirmados/recebidos
   if (event !== 'PAYMENT_RECEIVED' && event !== 'PAYMENT_CONFIRMED') {
@@ -182,13 +218,16 @@ export async function handlePaymentConfirmation(body: any): Promise<{ ok: boolea
 
   console.log(`[asaas webhook] pagamento confirmado: ${payment.id} para mercado ${mercadoId}`)
 
-  // Atualiza o mercado para ativo
+  // Atualiza o mercado para ativo com data do último pagamento
   const { db } = await import('@/lib/db')
   await db.mercado.update(mercadoId, {
     status: 'ativo',
     asaasCustomerId: payment.customer,
+    asaasPaymentId: payment.id,
     ultimoPagamento: new Date().toISOString(),
     ultimoPagamentoValor: payment.value,
+    // Se tiver subscription, salva o ID
+    ...(payment.subscription ? { asaasSubscriptionId: payment.subscription } : {}),
   })
 
   console.log(`[asaas webhook] mercado ${mercadoId} ativado com sucesso`)

@@ -72,6 +72,9 @@ interface AdminMercado {
   destaque: boolean
   mensalidade: number
   criadoEm: string
+  asaasSubscriptionId?: string | null
+  asaasAssinaturaCancelada?: boolean
+  ultimoPagamento?: string | null
   _count: {
     produtos: number
     encartes: number
@@ -94,6 +97,14 @@ function statusBadge(status: string) {
     ativo_aguardando_pagamento: {
       label: 'Aguarda Pgto',
       cls: 'bg-orange-100 text-orange-700 border-orange-200',
+    },
+    ativo_carencia: {
+      label: 'Carência',
+      cls: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+    },
+    assinatura_cancelada: {
+      label: 'Cancelado',
+      cls: 'bg-red-100 text-red-700 border-red-200',
     },
     inativo: {
       label: 'Inativo',
@@ -410,6 +421,197 @@ function NewMarketForm({ onCreated }: { onCreated: () => void }) {
   )
 }
 
+// ── Asaas Manage Button ──────────────────────────────────────────────────
+
+function AsaasManageButton({ mercadoId, mercadoNome, onRefresh }: { mercadoId: string; mercadoNome: string; onRefresh: () => void }) {
+  const [loading, setLoading] = useState<string | null>(null)
+  const [asaasData, setAsaasData] = useState<any>(null)
+  const [open, setOpen] = useState(false)
+
+  const fetchAsaas = async () => {
+    setLoading('fetch')
+    try {
+      const data = await api(`/api/admin/asaas-subscription?id=${mercadoId}`)
+      setAsaasData(data)
+      setOpen(true)
+    } catch (err) {
+      toast.error('Erro ao buscar dados do Asaas')
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const handleAction = async (acao: string) => {
+    setLoading(acao)
+    try {
+      await api('/api/admin/asaas-subscription', {
+        method: 'POST',
+        body: JSON.stringify({ id: mercadoId, acao }),
+      })
+      toast.success(`Ação "${acao}" executada com sucesso`)
+      setOpen(false)
+      onRefresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao executar ação')
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        className="text-xs h-7 border-purple-200 text-purple-600 hover:bg-purple-50"
+        disabled={!!loading}
+        onClick={fetchAsaas}
+      >
+        {loading === 'fetch' ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <DollarSign className="h-3 w-3 mr-1" />}
+        Asaas
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Assinatura Asaas — {mercadoNome}</DialogTitle>
+          </DialogHeader>
+          {asaasData && (
+            <div className="space-y-4 mt-2">
+              {/* Status geral */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border bg-gray-50 p-3">
+                  <p className="text-[10px] text-gray-500 uppercase">Status Local</p>
+                  <p className="text-sm font-semibold">{statusBadge(asaasData.status)}</p>
+                </div>
+                <div className="rounded-lg border bg-gray-50 p-3">
+                  <p className="text-[10px] text-gray-500 uppercase">Assinatura</p>
+                  <p className="text-sm font-semibold">
+                    {asaasData.subscription ? (
+                      <span className={cn(
+                        asaasData.subscription.status === 'ACTIVE' ? 'text-green-600' :
+                        asaasData.subscription.status === 'CANCELED' || asaasData.subscription.status === 'INACTIVE' ? 'text-red-600' : 'text-orange-600'
+                      )}>
+                        {asaasData.subscription.status}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">Nenhuma</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Detalhes */}
+              {asaasData.subscription && (
+                <div className="rounded-lg border p-3 space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Ciclo</span>
+                    <span className="font-medium">{asaasData.subscription.cycle || '—'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Tipo Cobrança</span>
+                    <span className="font-medium">{asaasData.subscription.billingType || '—'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Valor</span>
+                    <span className="font-medium">R$ {asaasData.subscription.value || '—'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Próx. Vencimento</span>
+                    <span className="font-medium">{asaasData.subscription.nextDueDate || '—'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Último Pagamento</span>
+                    <span className="font-medium">{asaasData.ultimoPagamento ? new Date(asaasData.ultimoPagamento).toLocaleDateString('pt-BR') : '—'}</span>
+                  </div>
+                  {asaasData.asaasAssinaturaCancelada && (
+                    <div className="flex justify-between text-red-600">
+                      <span>Assinatura</span>
+                      <span className="font-semibold">CANCELADA</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Últimas faturas */}
+              {asaasData.ultimasFaturas && asaasData.ultimasFaturas.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-gray-700">Últimas Faturas</p>
+                  <div className="border rounded-lg overflow-hidden">
+                    {asaasData.ultimasFaturas.map((f: any, i: number) => (
+                      <div key={f.id} className={cn('flex items-center justify-between px-3 py-2 text-xs', i > 0 && 'border-t')}>
+                        <div>
+                          <span className="text-gray-500">{f.dueDate}</span>
+                          {f.paymentDate && <span className="ml-2 text-green-600">Pago {f.paymentDate.split('T')[0]}</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">R$ {f.value}</span>
+                          <Badge className={cn('text-[9px]',
+                            f.status === 'RECEIVED' || f.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' :
+                            f.status === 'PENDING' || f.status === 'WAITING' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                          )}>
+                            {f.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Erro */}
+              {asaasData.subscriptionError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700">
+                  Erro ao buscar assinatura: {asaasData.subscriptionError}
+                </div>
+              )}
+
+              {/* Ações do admin */}
+              <div className="flex flex-wrap gap-2 pt-2 border-t">
+                {asaasData.subscription?.status === 'ACTIVE' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-8 border-orange-200 text-orange-600 hover:bg-orange-50"
+                    disabled={!!loading}
+                    onClick={() => handleAction('cancelar_assinatura')}
+                  >
+                    {loading === 'cancelar_assinatura' ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <AlertTriangle className="h-3 w-3 mr-1" />}
+                    Cancelar Recorrência
+                  </Button>
+                )}
+                {asaasData.asaasAssinaturaCancelada && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-8 border-green-200 text-green-600 hover:bg-green-50"
+                    disabled={!!loading}
+                    onClick={() => handleAction('reativar_assinatura')}
+                  >
+                    {loading === 'reativar_assinatura' ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+                    Reativar Assinatura
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-8 border-red-200 text-red-600 hover:bg-red-50"
+                  disabled={!!loading}
+                  onClick={() => { if (confirm(`Desativar "${mercadoNome}" e cancelar a assinatura?`)) handleAction('desativar_pagamento') }}
+                >
+                  {loading === 'desativar_pagamento' ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+                  Desativar e Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
 // ── Market Row ──────────────────────────────────────────────────────────────
 
 function MarketRow({
@@ -569,6 +771,11 @@ function MarketRow({
               )}
               {nextLabel}
             </Button>
+
+            {/* Asaas - Ver status/Cancelar assinatura */}
+            {m.asaasSubscriptionId && (
+              <AsaasManageButton mercadoId={m.id} mercadoNome={m.nome} onRefresh={onRefresh} />
+            )}
 
             {/* Contrato button - aparece quando ativo ou piloto */}
             {(m.status === 'ativo' || m.status === 'piloto') && (
