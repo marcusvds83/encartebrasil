@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { getSubscription, getSubscriptionPayments, cancelSubscription } from '@/lib/asaas'
 
 /**
  * GET /api/admin/asaas-subscription?id=<mercadoId>
- * Busca status da assinatura Asaas de um mercado específico.
+ * Retorna informações de pagamento de um mercado (sem integração Asaas).
+ * Dados vêm diretamente do Firestore.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
     const mercadoId = req.nextUrl.searchParams.get('id')
     if (!mercadoId) {
-      return NextResponse.json({ erro: 'ID do mercado obrigatório' }, { status: 400 })
+      return NextResponse.json({ erro: 'ID da empresa obrigatório' }, { status: 400 })
     }
 
     const mercado = await db.mercado.findUnique({ where: { id: mercadoId } })
@@ -25,59 +25,29 @@ export async function GET(req: NextRequest) {
     }
 
     const m = mercado as any
-    const result: any = {
+    return NextResponse.json({
       mercadoId: m.id,
       nome: m.nome,
       status: m.status,
-      asaasCustomerId: m.asaasCustomerId || null,
-      asaasSubscriptionId: m.asaasSubscriptionId || null,
-      asaasAssinaturaCancelada: m.asaasAssinaturaCancelada || false,
+      formaPagamento: m.formaPagamento || null,
       ultimoPagamento: m.ultimoPagamento || null,
       ultimoPagamentoValor: m.ultimoPagamentoValor || null,
-    }
-
-    // Busca dados da assinatura no Asaas
-    if (m.asaasSubscriptionId) {
-      try {
-        const sub = await getSubscription(m.asaasSubscriptionId)
-        result.subscription = {
-          id: sub.id,
-          status: sub.status,
-          cycle: sub.cycle,
-          nextDueDate: sub.nextDueDate,
-          billingType: sub.billingType,
-          value: sub.value,
-        }
-
-        // Últimas faturas
-        const payments = await getSubscriptionPayments(m.asaasSubscriptionId)
-        result.ultimasFaturas = payments.slice(0, 5).map((p: any) => ({
-          id: p.id,
-          status: p.status,
-          value: p.value,
-          billingType: p.billingType,
-          dueDate: p.dueDate,
-          paymentDate: p.paymentDate || null,
-        }))
-      } catch (err: any) {
-        result.subscriptionError = err?.message || 'Erro ao buscar assinatura no Asaas'
-      }
-    } else {
-      result.subscription = null
-      result.ultimasFaturas = []
-    }
-
-    return NextResponse.json(result)
+      dataProximoPagamento: m.dataProximoPagamento || null,
+      dataEscolhaPagamento: m.dataEscolhaPagamento || null,
+      asaasAssinaturaCancelada: false,
+      subscription: null,
+    })
   } catch (err: any) {
-    console.error(`[admin asaas-subscription] erro: ${err?.message || err}`)
+    console.error(`[admin subscription] erro: ${err?.message || err}`)
     return NextResponse.json({ erro: 'Erro interno' }, { status: 500 })
   }
 }
 
 /**
  * POST /api/admin/asaas-subscription
- * Cancela a assinatura de um mercado (ação admin).
- * Body: { id: mercadoId }
+ * Ações admin sobre a assinatura de um mercado.
+ * Sem Asaas — o controle é feito via Odoo CRM + envio manual de contrato/link.
+ * Body: { id: mercadoId, acao: string }
  */
 export async function POST(req: NextRequest) {
   try {
@@ -99,34 +69,33 @@ export async function POST(req: NextRequest) {
     const m = mercado as any
 
     if (acao === 'cancelar_assinatura') {
-      // Cancela a assinatura recorrente no Asaas
-      if (m.asaasSubscriptionId) {
-        try {
-          await cancelSubscription(m.asaasSubscriptionId)
-        } catch (err: any) {
-          console.error(`[admin asaas] erro ao cancelar: ${err?.message}`)
-        }
-      }
-      await db.mercado.update(id, { asaasAssinaturaCancelada: true } as any)
-      return NextResponse.json({ ok: true, mensagem: `Assinatura de "${m.nome}" cancelada. Carência de 30 dias.` })
+      // Cancela assinatura localmente — o admin trata via Odoo
+      await db.mercado.update(id, {
+        asaasAssinaturaCancelada: true,
+        asaasSubscriptionId: null,
+        asaasPaymentId: null,
+        asaasCustomerId: null,
+      } as any)
+      return NextResponse.json({ ok: true, mensagem: `Assinatura de "${m.nome}" cancelada.` })
 
     } else if (acao === 'reativar_assinatura') {
-      // Reativa localmente — o mercado precisará criar nova assinatura
+      // Reativa localmente — a empresa precisará escolher pagamento novamente
       await db.mercado.update(id, {
         asaasAssinaturaCancelada: false,
         asaasSubscriptionId: null,
         asaasPaymentId: null,
+        asaasCustomerId: null,
         status: 'ativo_aguardando_pagamento',
       } as any)
-      return NextResponse.json({ ok: true, mensagem: `"${m.nome}" precisará gerar nova assinatura no próximo login.` })
+      return NextResponse.json({ ok: true, mensagem: `"${m.nome}" precisará escolher forma de pagamento no próximo login.` })
 
     } else if (acao === 'desativar_pagamento') {
-      // Cancela assinatura e bloqueia imediatamente
-      if (m.asaasSubscriptionId) {
-        try { await cancelSubscription(m.asaasSubscriptionId) } catch {}
-      }
+      // Cancela e bloqueia imediatamente
       await db.mercado.update(id, {
         asaasAssinaturaCancelada: true,
+        asaasSubscriptionId: null,
+        asaasPaymentId: null,
+        asaasCustomerId: null,
         status: 'inativo',
       } as any)
       return NextResponse.json({ ok: true, mensagem: `"${m.nome}" desativado.` })
@@ -135,7 +104,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ erro: 'Ação inválida' }, { status: 400 })
   } catch (err: any) {
-    console.error(`[admin asaas-subscription] erro: ${err?.message || err}`)
+    console.error(`[admin subscription] erro: ${err?.message || err}`)
     return NextResponse.json({ erro: 'Erro interno' }, { status: 500 })
   }
 }

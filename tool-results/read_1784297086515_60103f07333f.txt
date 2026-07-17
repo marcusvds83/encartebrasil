@@ -1,0 +1,1106 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  Search,
+     7→  MapPin,
+     8→  FileText,
+     9→  Package,
+    10→  ArrowLeft,
+    11→  Plus,
+    12→  ChevronRight,
+    13→  Star,
+    14→  Store,
+    15→  Calendar,
+    16→  Tag,
+    17→  Clock,
+    18→  X,
+    19→  ShoppingCart,
+    20→  PawPrint,
+    21→} from 'lucide-react'
+    22→import { Button } from '@/components/ui/button'
+    23→import { Input } from '@/components/ui/input'
+    24→import { Badge } from '@/components/ui/badge'
+    25→import { Card, CardContent } from '@/components/ui/card'
+    26→import { Skeleton } from '@/components/ui/skeleton'
+    27→import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
+    28→import {
+    29→  Select,
+    30→  SelectContent,
+    31→  SelectItem,
+    32→  SelectTrigger,
+    33→  SelectValue,
+    34→} from '@/components/ui/select'
+    35→import { cn } from '@/lib/utils'
+    36→import { api, getSessionId } from './AppShell'
+    37→import { HomeLoading } from './LoadingAnimation'
+    38→
+    39→// ── Types ───────────────────────────────────────────────────────────────────
+    40→
+    41→interface MercadoSummary {
+    42→  id: string
+    43→  nome: string
+    44→  cidade: string
+    45→  estado: string
+    46→  segmento: string
+    47→  logoPath?: string | null
+    48→  destaque: boolean
+    49→  totalProdutos: number
+    50→  totalEncartes: number
+    51→}
+    52→
+    53→interface EncarteDetail {
+    54→  id: string
+    55→  titulo: string
+    56→  pdfPath?: string | null
+    57→  dataInicio?: string | null
+    58→  dataFim?: string | null
+    59→  statusExtracao: string
+    60→  criadoEm: string
+    61→  _count: { produtos: number }
+    62→}
+    63→
+    64→interface ProdutoDetail {
+    65→  id: string
+    66→  nome: string
+    67→  marca?: string | null
+    68→  preco: string
+    69→  unidade?: string | null
+    70→  encarteId: string
+    71→  mercadoId: string
+    72→}
+    73→
+    74→interface MercadoDetail {
+    75→  id: string
+    76→  nome: string
+    77→  cidade: string
+    78→  estado: string
+    79→  endereco?: string | null
+    80→  telefone?: string | null
+    81→  status: string
+    82→  destaque: boolean
+    83→  encartes: EncarteDetail[]
+    84→  produtos: ProdutoDetail[]
+    85→}
+    86→
+    87→// ── Helpers ─────────────────────────────────────────────────────────────────
+    88→
+    89→function getInitials(name: string): string {
+    90→  return name
+    91→    .split(/[\s]+/)
+    92→    .filter(Boolean)
+    93→    .slice(0, 2)
+    94→    .map((w) => w[0])
+    95→    .join('')
+    96→    .toUpperCase()
+    97→}
+    98→
+    99→function formatDate(iso: string | null | undefined): string {
+   100→  if (!iso) return ''
+   101→  const d = new Date(iso + 'T00:00:00')
+   102→  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+   103→}
+   104→
+   105→function statusLabel(status: string): string {
+   106→  const map: Record<string, string> = {
+   107→    pendente: 'Pendente',
+   108→    processando: 'Processando',
+   109→    concluido: 'Concluído',
+   110→    erro: 'Erro',
+   111→  }
+   112→  return map[status] || status
+   113→}
+   114→
+   115→function statusVariant(
+   116→  status: string,
+   117→): 'default' | 'secondary' | 'destructive' | 'outline' {
+   118→  if (status === 'concluido') return 'default'
+   119→  if (status === 'erro') return 'destructive'
+   120→  if (status === 'processando') return 'secondary'
+   121→  return 'outline'
+   122→}
+   123→
+   124→// ── Destaque Card ───────────────────────────────────────────────────────────
+   125→
+   126→function DestaqueCard({
+   127→  m,
+   128→  onClick,
+   129→}: {
+   130→  m: MercadoSummary
+   131→  onClick: () => void
+   132→}) {
+   133→  return (
+   134→    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
+   135→      <Card
+   136→        className="min-w-[220px] max-w-[220px] cursor-pointer hover:shadow-lg transition-shadow border-red-50 bg-white"
+   137→        onClick={onClick}
+   138→      >
+   139→        <CardContent className="p-4 flex flex-col items-center gap-3 text-center">
+   140→          <div className="relative">
+   141→            <div className="h-14 w-14 rounded-full bg-red-600 flex items-center justify-center text-white font-bold text-lg">
+   142→              {getInitials(m.nome)}
+   143→            </div>
+   144→            <Badge className="absolute -top-2 -right-2 bg-amber-400 text-amber-900 text-[10px] px-1.5 py-0 border-0">
+   145→              <Star className="h-2.5 w-2.5 mr-0.5" />
+   146→              Patrocinado
+   147→            </Badge>
+   148→          </div>
+   149→          <div>
+   150→            <p className="font-semibold text-sm line-clamp-1">{m.nome}</p>
+   151→            <p className="text-xs text-gray-500 flex items-center justify-center gap-1 mt-1">
+   152→              <MapPin className="h-3 w-3" />
+   153→              {m.cidade}/{m.estado}
+   154→            </p>
+   155→          </div>
+   156→          <div className="flex gap-3 text-xs text-gray-500">
+   157→            <span className="flex items-center gap-1">
+   158→              <FileText className="h-3 w-3" /> {m.totalEncartes}
+   159→            </span>
+   160→            <span className="flex items-center gap-1">
+   161→              <Package className="h-3 w-3" /> {m.totalProdutos}
+   162→            </span>
+   163→          </div>
+   164→        </CardContent>
+   165→      </Card>
+   166→    </motion.div>
+   167→  )
+   168→}
+   169→
+   170→// ── Market Card (Grid) ──────────────────────────────────────────────────────
+   171→
+   172→function MarketCard({
+   173→  m,
+   174→  onCatalogo,
+   175→  onProdutos,
+   176→}: {
+   177→  m: MercadoSummary
+   178→  onCatalogo: () => void
+   179→  onProdutos: () => void
+   180→}) {
+   181→  return (
+   182→    <motion.div
+   183→      whileHover={{ y: -2 }}
+   184→      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+   185→    >
+   186→      <Card className="hover:shadow-lg transition-all border-gray-100 bg-white h-full">
+   187→        <CardContent className="p-4 flex flex-col gap-3">
+   188→          <div className="flex items-center gap-3">
+   189→            <div className="h-11 w-11 rounded-full bg-red-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
+   190→              {getInitials(m.nome)}
+   191→            </div>
+   192→            <div className="min-w-0">
+   193→              <p className="font-semibold text-sm truncate">{m.nome}</p>
+   194→              <p className="text-xs text-gray-500 flex items-center gap-1">
+   195→                <MapPin className="h-3 w-3 shrink-0" />
+   196→                <span className="truncate">
+   197→                  {m.cidade}/{m.estado}
+   198→                </span>
+   199→              </p>
+   200→            </div>
+   201→          </div>
+   202→          <div className="flex items-center gap-3 text-xs text-gray-500 mt-auto">
+   203→            <span className="flex items-center gap-1">
+   204→              <FileText className="h-3 w-3" />
+   205→              {m.totalEncartes} encarte{m.totalEncartes !== 1 ? 's' : ''}
+   206→            </span>
+   207→            <span className="flex items-center gap-1">
+   208→              <Package className="h-3 w-3" />
+   209→              {m.totalProdutos} produto{m.totalProdutos !== 1 ? 's' : ''}
+   210→            </span>
+   211→          </div>
+   212→          <div className="flex gap-2">
+   213→            <Button
+   214→              size="sm"
+   215→              className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs h-9"
+   216→              onClick={(e) => { e.stopPropagation(); onCatalogo() }}
+   217→            >
+   218→              <FileText className="h-3.5 w-3.5 mr-1" />
+   219→              Catálogo
+   220→            </Button>
+   221→            <Button
+   222→              size="sm"
+   223→              variant="outline"
+   224→              className="flex-1 text-red-600 border-red-200 hover:bg-orange-50 hover:text-red-700 text-xs h-9"
+   225→              onClick={(e) => { e.stopPropagation(); onProdutos() }}
+   226→            >
+   227→              <Package className="h-3.5 w-3.5 mr-1" />
+   228→              Lista de Itens
+   229→            </Button>
+   230→          </div>
+   231→        </CardContent>
+   232→      </Card>
+   233→    </motion.div>
+   234→  )
+   235→}
+   236→
+   237→// ── Market Detail View ──────────────────────────────────────────────────────
+   238→
+   239→function MarketDetailView({
+   240→  mercadoId,
+   241→  onBack,
+   242→  sessionId,
+   243→  onAddToList,
+   244→  initialMode = 'produtos',
+   245→}: {
+   246→  mercadoId: string
+   247→  onBack: () => void
+   248→  sessionId: string
+   249→  onAddToList: (item: {
+   250→    produtoId: string
+   251→    mercadoId: string
+   252→    nome: string
+   253→    marca?: string | null
+   254→    preco?: string | null
+   255→    unidade?: string | null
+   256→    mercadoNome?: string | null
+   257→    mercadoCidade?: string | null
+   258→  }) => void
+   259→  initialMode?: 'produtos' | 'catalogo'
+   260→}) {
+   261→  const [detail, setDetail] = useState<MercadoDetail | null>(null)
+   262→  const [loading, setLoading] = useState(true)
+   263→  const [error, setError] = useState<string | null>(null)
+   264→  const [expandedEncarte, setExpandedEncarte] = useState<string | null>(null)
+   265→  const [encarteProducts, setEncarteProducts] = useState<
+   266→    Record<string, ProdutoDetail[]>
+   267→  >({})
+   268→  const [viewMode, setViewMode] = useState<'produtos' | 'catalogo'>(initialMode)
+   269→  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+   270→
+   271→  useEffect(() => {
+   272→    let cancelled = false
+   273→    api<MercadoDetail>(`/api/mercados/${mercadoId}`)
+   274→      .then((d) => {
+   275→        if (!cancelled) setDetail(d)
+   276→      })
+   277→      .catch((e) => {
+   278→        if (!cancelled) setError(e.message)
+   279→      })
+   280→      .finally(() => {
+   281→        if (!cancelled) setLoading(false)
+   282→      })
+   283→    return () => {
+   284→      cancelled = true
+   285→    }
+   286→  }, [mercadoId])
+   287→
+   288→  const loadEncarteProducts = useCallback(
+   289→    async (eid: string) => {
+   290→      if (encarteProducts[eid]) {
+   291→        setExpandedEncarte(expandedEncarte === eid ? null : eid)
+   292→        return
+   293→      }
+   294→      try {
+   295→        const prods = await api<ProdutoDetail[]>(
+   296→          `/api/mercado/encarte/${eid}/produtos`,
+   297→        )
+   298→        setEncarteProducts((prev) => ({ ...prev, [eid]: prods }))
+   299→        setExpandedEncarte(eid)
+   300→      } catch {
+   301→        /* ignore */
+   302→      }
+   303→    },
+   304→    [encarteProducts, expandedEncarte],
+   305→  )
+   306→
+   307→  // Auto-load first PDF when catalogo mode
+   308→  useEffect(() => {
+   309→    if (viewMode === 'catalogo' && detail && !pdfUrl) {
+   310→      const firstPdf = detail.encartes.find((e) => e.pdfPath)
+   311→      if (firstPdf) {
+   312→        setPdfUrl(`/api/encarte/${firstPdf.id}/pdf`)
+   313→      }
+   314→    }
+   315→  }, [viewMode, detail, pdfUrl])
+   316→
+   317→  const handleSwitchMode = useCallback((mode: 'produtos' | 'catalogo') => {
+   318→    setViewMode(mode)
+   319→    if (mode === 'catalogo' && detail) {
+   320→      const firstPdf = detail.encartes.find((e) => e.pdfPath)
+   321→      setPdfUrl(firstPdf ? `/api/encarte/${firstPdf.id}/pdf` : null)
+   322→    }
+   323→  }, [detail])
+   324→
+   325→  const handleAdd = useCallback(
+   326→    (p: ProdutoDetail) => {
+   327→      api('/api/clique', {
+   328→        method: 'POST',
+   329→        body: JSON.stringify({
+   330→          produtoId: p.id,
+   331→          mercadoId: mercadoId,
+   332→          sessionId,
+   333→          tipo: 'produto',
+   334→        }),
+   335→      }).catch(() => {})
+   336→      onAddToList({
+   337→        produtoId: p.id,
+   338→        mercadoId: mercadoId,
+   339→        nome: p.nome,
+   340→        marca: p.marca,
+   341→        preco: p.preco,
+   342→        unidade: p.unidade,
+   343→        mercadoNome: detail?.nome,
+   344→        mercadoCidade: detail ? `${detail.cidade}/${detail.estado}` : undefined,
+   345→      })
+   346→    },
+   347→    [sessionId, mercadoId, detail, onAddToList],
+   348→  )
+   349→
+   350→  if (loading) {
+   351→    return <HomeLoading />
+   352→  }
+   353→
+   354→  if (error || !detail) {
+   355→    return (
+   356→      <div className="text-center py-12">
+   357→        <p className="text-red-500">{error || 'Empresa não encontrada'}</p>
+   358→        <Button variant="outline" onClick={onBack} className="mt-4">
+   359→          <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
+   360→        </Button>
+   361→      </div>
+   362→    )
+   363→  }
+   364→
+   365→  return (
+   366→    <div className="space-y-6">
+   367→      {/* Back + Header */}
+   368→      <div className="flex items-center gap-3">
+   369→        <Button variant="ghost" size="sm" onClick={onBack}>
+   370→          <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+   371→        </Button>
+   372→      </div>
+   373→
+   374→      <Card>
+   375→        <CardContent className="p-4 flex items-center gap-4">
+   376→          <div className="h-14 w-14 rounded-full bg-red-600 flex items-center justify-center text-white font-bold text-lg shrink-0">
+   377→            {getInitials(detail.nome)}
+   378→          </div>
+   379→          <div className="min-w-0">
+   380→            <h2 className="text-lg font-bold truncate">{detail.nome}</h2>
+   381→            <p className="text-sm text-gray-500 flex items-center gap-1">
+   382→              <MapPin className="h-3.5 w-3.5 shrink-0" />
+   383→              {detail.cidade}/{detail.estado}
+   384→              {detail.endereco && ` · ${detail.endereco}`}
+   385→            </p>
+   386→            {detail.telefone && (
+   387→              <p className="text-xs text-gray-400 mt-0.5">{detail.telefone}</p>
+   388→            )}
+   389→          </div>
+   390→        </CardContent>
+   391→      </Card>
+   392→
+   393→      {/* Mode toggle: Lista de Itens / Catálogo PDF */}
+   394→      <div className="flex gap-2">
+   395→        <Button
+   396→          size="sm"
+   397→          variant={viewMode === 'produtos' ? 'default' : 'outline'}
+   398→          className={cn(
+   399→            'flex-1 h-9 text-xs',
+   400→            viewMode === 'produtos'
+   401→              ? 'bg-red-600 hover:bg-red-700 text-white'
+   402→              : 'text-gray-500 border-gray-200',
+   403→          )}
+   404→          onClick={() => handleSwitchMode('produtos')}
+   405→        >
+   406→          <Package className="h-3.5 w-3.5 mr-1" />
+   407→          Lista de Itens
+   408→        </Button>
+   409→        <Button
+   410→          size="sm"
+   411→          variant={viewMode === 'catalogo' ? 'default' : 'outline'}
+   412→          className={cn(
+   413→            'flex-1 h-9 text-xs',
+   414→            viewMode === 'catalogo'
+   415→              ? 'bg-red-600 hover:bg-red-700 text-white'
+   416→              : 'text-gray-500 border-gray-200',
+   417→          )}
+   418→          onClick={() => handleSwitchMode('catalogo')}
+   419→        >
+   420→          <FileText className="h-3.5 w-3.5 mr-1" />
+   421→          Catálogo PDF
+   422→        </Button>
+   423→      </div>
+   424→
+   425→      {/* PDF Catalog Viewer */}
+   426→      {viewMode === 'catalogo' && (
+   427→        <section>
+   428→          {pdfUrl ? (
+   429→            <>
+   430→              {/* Encarte selector if multiple */}
+   431→              {detail.encartes.filter((e) => e.pdfPath).length > 1 && (
+   432→                <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
+   433→                  {detail.encartes.filter((e) => e.pdfPath).map((e) => (
+   434→                    <button
+   435→                      key={e.id}
+   436→                      onClick={() => setPdfUrl(`/api/encarte/${e.id}/pdf`)}
+   437→                      className={cn(
+   438→                        'shrink-0 text-xs px-3 py-1.5 rounded-full border transition-colors whitespace-nowrap',
+   439→                        pdfUrl === `/api/encarte/${e.id}/pdf`
+   440→                          ? 'bg-red-600 text-white border-red-600'
+   441→                          : 'bg-white text-gray-600 border-gray-200 hover:border-red-300',
+   442→                      )}
+   443→                    >
+   444→                      {e.titulo}
+   445→                    </button>
+   446→                  ))}
+   447→                </div>
+   448→              )}
+   449→              <div className="bg-gray-100 rounded-xl overflow-hidden border border-gray-200">
+   450→                <iframe
+   451→                  src={pdfUrl}
+   452→                  className="w-full h-[70vh] min-h-[500px]"
+   453→                  title={`Catálogo ${detail.nome}`}
+   454→                />
+   455→              </div>
+   456→            </>
+   457→          ) : (
+   458→            <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border border-gray-100">
+   459→              <FileText className="h-10 w-10 mx-auto mb-2 opacity-50" />
+   460→              <p className="text-sm">Nenhum catálogo PDF disponível</p>
+   461→            </div>
+   462→          )}
+   463→        </section>
+   464→      )}
+   465→
+   466→      {/* Products list (shown in produtos mode) */}
+   467→      {viewMode === 'produtos' && detail.produtos.length > 0 && (
+   468→        <section>
+   469→          <h3 className="font-semibold text-sm mb-3 text-gray-700 flex items-center gap-1.5">
+   470→            <Package className="h-4 w-4 text-red-600" />
+   471→            Produtos em promoção ({detail.produtos.length})
+   472→          </h3>
+   473→          <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+   474→            {detail.produtos.map((p) => (
+   475→              <motion.div
+   476→                key={p.id}
+   477→                initial={{ opacity: 0, y: 4 }}
+   478→                animate={{ opacity: 1, y: 0 }}
+   479→                whileHover={{ backgroundColor: 'rgba(5,150,105,0.04)' }}
+   480→                className="flex items-center justify-between gap-3 p-3 rounded-lg bg-white border border-gray-100"
+   481→              >
+   482→                <div className="min-w-0">
+   483→                  <p className="text-sm font-medium truncate">
+   484→                    {p.nome}
+   485→                    {p.marca && (
+   486→                      <span className="text-gray-400 font-normal">
+   487→                        {' '}
+   488→                        · {p.marca}
+   489→                      </span>
+   490→                    )}
+   491→                  </p>
+   492→                  <p className="text-xs text-gray-400">
+   493→                    {p.unidade || 'un.'}
+   494→                  </p>
+   495→                </div>
+   496→                <div className="flex items-center gap-2 shrink-0">
+   497→                  <span className="text-sm font-bold text-red-600">
+   498→                    {p.preco}
+   499→                  </span>
+   500→                  <Button
+   501→                    size="icon"
+   502→                    variant="outline"
+   503→                    className="h-8 w-8 text-red-600 border-red-200 hover:bg-orange-50"
+   504→                    onClick={() => handleAdd(p)}
+   505→                  >
+   506→                    <Plus className="h-4 w-4" />
+   507→                  </Button>
+   508→                </div>
+   509→              </motion.div>
+   510→            ))}
+   511→          </div>
+   512→        </section>
+   513→      )}
+   514→
+   515→      {/* Encartes (only in produtos mode) */}
+   516→      {viewMode === 'produtos' && detail.encartes.length > 0 && (
+   517→        <section>
+   518→          <h3 className="font-semibold text-sm mb-3 text-gray-700 flex items-center gap-1.5">
+   519→            <FileText className="h-4 w-4 text-red-600" />
+   520→            Encartes ({detail.encartes.length})
+   521→          </h3>
+   522→          <div className="space-y-2">
+   523→            {detail.encartes.map((e) => (
+   524→              <Card key={e.id} className="border-gray-100">
+   525→                <button
+   526→                  className="w-full text-left p-3 flex items-center justify-between"
+   527→                  onClick={() => loadEncarteProducts(e.id)}
+   528→                >
+   529→                  <div className="flex items-center gap-3 min-w-0">
+   530→                    <FileText className="h-4 w-4 text-red-500 shrink-0" />
+   531→                    <div className="min-w-0">
+   532→                      <p className="text-sm font-medium truncate">{e.titulo}</p>
+   533→                      <div className="flex items-center gap-2 mt-0.5">
+   534→                        <p className="text-xs text-gray-400">
+   535→                          {e._count.produtos} produto
+   536→                          {e._count.produtos !== 1 ? 's' : ''}
+   537→                        </p>
+   538→                        {(e.dataInicio || e.dataFim) && (
+   539→                          <p className="text-[10px] text-gray-400 flex items-center gap-0.5">
+   540→                            <Calendar className="h-2.5 w-2.5" />
+   541→                            {formatDate(e.dataInicio)}
+   542→                            {(e.dataInicio || e.dataFim) && ' — '}
+   543→                            {formatDate(e.dataFim)}
+   544→                          </p>
+   545→                        )}
+   546→                      </div>
+   547→                    </div>
+   548→                  </div>
+   549→                  <div className="flex items-center gap-2 shrink-0">
+   550→                    {e.pdfPath && (
+   551→                      <a
+   552→                        href={`/api/encarte/${e.id}/pdf`}
+   553→                        target="_blank"
+   554→                        rel="noopener noreferrer"
+   555→                        onClick={(ev) => ev.stopPropagation()}
+   556→                        className="text-[10px] bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-md font-medium"
+   557→                      >
+   558→                        Ver PDF
+   559→                      </a>
+   560→                    )}
+   561→                    <Badge
+   562→                      variant={statusVariant(e.statusExtracao)}
+   563→                      className="text-[10px]"
+   564→                    >
+   565→                      {statusLabel(e.statusExtracao)}
+   566→                    </Badge>
+   567→                    <motion.div
+   568→                      animate={{
+   569→                        rotate: expandedEncarte === e.id ? 90 : 0,
+   570→                      }}
+   571→                      transition={{ duration: 0.15 }}
+   572→                    >
+   573→                      <ChevronRight className="h-4 w-4 text-gray-400" />
+   574→                    </motion.div>
+   575→                  </div>
+   576→                </button>
+   577→                <AnimatePresence>
+   578→                  {expandedEncarte === e.id &&
+   579→                    encarteProducts[e.id] && (
+   580→                      <motion.div
+   581→                        initial={{ height: 0, opacity: 0 }}
+   582→                        animate={{ height: 'auto', opacity: 1 }}
+   583→                        exit={{ height: 0, opacity: 0 }}
+   584→                        transition={{ duration: 0.2 }}
+   585→                        className="overflow-hidden"
+   586→                      >
+   587→                        <div className="px-3 pb-3 space-y-1.5 border-t border-gray-50 pt-2">
+   588→                          {encarteProducts[e.id].map((p) => (
+   589→                            <div
+   590→                              key={p.id}
+   591→                              className="flex items-center justify-between gap-2 py-1.5"
+   592→                            >
+   593→                              <div className="min-w-0">
+   594→                                <p className="text-xs font-medium truncate">
+   595→                                  {p.nome}
+   596→                                  {p.marca && (
+   597→                                    <span className="text-gray-400 font-normal">
+   598→                                      {' '}
+   599→                                      · {p.marca}
+   600→                                    </span>
+   601→                                  )}
+   602→                                </p>
+   603→                              </div>
+   604→                              <div className="flex items-center gap-2 shrink-0">
+   605→                                <span className="text-xs font-semibold text-red-600">
+   606→                                  {p.preco}
+   607→                                </span>
+   608→                                <Button
+   609→                                  size="icon"
+   610→                                  variant="ghost"
+   611→                                  className="h-6 w-6 text-red-600"
+   612→                                  onClick={() => handleAdd(p)}
+   613→                                >
+   614→                                  <Plus className="h-3 w-3" />
+   615→                                </Button>
+   616→                              </div>
+   617→                            </div>
+   618→                          ))}
+   619→                        </div>
+   620→                      </motion.div>
+   621→                    )}
+   622→                </AnimatePresence>
+   623→              </Card>
+   624→            ))}
+   625→          </div>
+   626→        </section>
+   627→      )}
+   628→
+   629→      {detail.produtos.length === 0 && detail.encartes.length === 0 && (
+   630→        <div className="text-center py-12 text-gray-400">
+   631→          <FileText className="h-10 w-10 mx-auto mb-2 opacity-50" />
+   632→          <p className="text-sm">Nenhuma promoção vigente no momento</p>
+   633→          <p className="text-xs mt-1">Volte em breve para conferir novas ofertas</p>
+   634→        </div>
+   635→      )}
+   636→    </div>
+   637→  )
+   638→}
+   639→
+   640→// ── Search History (localStorage, 30 dias) ──────────────────────────────────
+   641→
+   642→const SEARCH_HISTORY_KEY = 'eb_search_history'
+   643→const SEARCH_MAX_AGE = 30 * 24 * 60 * 60 * 1000 // 30 dias
+   644→const SEARCH_MAX_ITEMS = 8
+   645→
+   646→interface SearchEntry { text: string; ts: number }
+   647→
+   648→function loadSearchHistory(): SearchEntry[] {
+   649→  if (typeof window === 'undefined') return []
+   650→  try {
+   651→    const raw = localStorage.getItem(SEARCH_HISTORY_KEY)
+   652→    if (!raw) return []
+   653→    const entries: SearchEntry[] = JSON.parse(raw)
+   654→    const now = Date.now()
+   655→    // Remove entradas antigas (> 30 dias)
+   656→    const valid = entries.filter((e) => now - e.ts < SEARCH_MAX_AGE)
+   657→    // Dedup mantendo a mais recente
+   658→    const seen = new Set<string>()
+   659→    const deduped: SearchEntry[] = []
+   660→    for (const e of valid.sort((a, b) => b.ts - a.ts)) {
+   661→      const key = e.text.toLowerCase().trim()
+   662→      if (key && !seen.has(key)) {
+   663→        seen.add(key)
+   664→        deduped.push(e)
+   665→      }
+   666→    }
+   667→    return deduped.slice(0, SEARCH_MAX_ITEMS)
+   668→  } catch { return [] }
+   669→}
+   670→
+   671→function saveSearchHistory(entries: SearchEntry[]) {
+   672→  if (typeof window === 'undefined') return
+   673→  try {
+   674→    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(entries.slice(0, SEARCH_MAX_ITEMS)))
+   675→  } catch { /* ignore quota */ }
+   676→}
+   677→
+   678→function addSearchTerm(text: string) {
+   679→  const trimmed = text.trim()
+   680→  if (!trimmed || trimmed.length < 2) return
+   681→  const entries = loadSearchHistory()
+   682→  const key = trimmed.toLowerCase()
+   683→  // Remove duplicata existente
+   684→  const filtered = entries.filter((e) => e.text.toLowerCase() !== key)
+   685→  filtered.unshift({ text: trimmed, ts: Date.now() })
+   686→  saveSearchHistory(filtered)
+   687→}
+   688→
+   689→function removeSearchTerm(text: string) {
+   690→  const entries = loadSearchHistory().filter((e) => e.text !== text)
+   691→  saveSearchHistory(entries)
+   692→}
+   693→
+   694→// ── HomeView ────────────────────────────────────────────────────────────────
+   695→
+   696→interface HomeViewProps {
+   697→  sessionId: string
+   698→  onAddToList: (item: {
+   699→    produtoId: string
+   700→    mercadoId: string
+   701→    nome: string
+   702→    marca?: string | null
+   703→    preco?: string | null
+   704→    unidade?: string | null
+   705→    mercadoNome?: string | null
+   706→    mercadoCidade?: string | null
+   707→  }) => void
+   708→}
+   709→
+   710→export default function HomeView({ sessionId, onAddToList }: HomeViewProps) {
+   711→  const [mercados, setMercados] = useState<MercadoSummary[]>([])
+   712→  const [destaques, setDestaques] = useState<MercadoSummary[]>([])
+   713→  const [maisBaratos, setMaisBaratos] = useState<any[]>([])
+   714→  const [searchProduto, setSearchProduto] = useState('')
+   715→  const [searchHistory, setSearchHistory] = useState<SearchEntry[]>([])
+   716→  const [searchMercado, setSearchMercado] = useState('')
+   717→  const [cityFilter, setCityFilter] = useState<string>('all')
+   718→  const [segmentoFilter, setSegmentoFilter] = useState<string>('')
+   719→  const [loading, setLoading] = useState(true)
+   720→  const [loadingProdutos, setLoadingProdutos] = useState(true)
+   721→  const [selectedMercado, setSelectedMercado] = useState<string | null>(null)
+   722→  const [detailMode, setDetailMode] = useState<'produtos' | 'catalogo'>('produtos')
+   723→  const scrollRef = useRef<HTMLDivElement>(null)
+   724→
+   725→  // Load search history on mount
+   726→  useEffect(() => { setSearchHistory(loadSearchHistory()) }, [])
+   727→
+   728→  // Fetch markets
+   729→  useEffect(() => {
+   730→    let cancelled = false
+   731→    api<{ mercados: MercadoSummary[]; destaques: MercadoSummary[] }>(
+   732→      '/api/mercados',
+   733→    )
+   734→      .then((d) => {
+   735→        if (!cancelled) {
+   736→          setMercados(d.mercados)
+   737→          setDestaques(d.destaques)
+   738→        }
+   739→      })
+   740→      .catch(() => {})
+   741→      .finally(() => {
+   742→        if (!cancelled) setLoading(false)
+   743→      })
+   744→    return () => {
+   745→      cancelled = true
+   746→    }
+   747→  }, [])
+   748→
+   749→  // Fetch mais baratos (with optional search + segmento) + salva histórico
+   750→  useEffect(() => {
+   751→    if (!segmentoFilter) {
+   752→      setMaisBaratos([])
+   753→      setLoadingProdutos(false)
+   754→      return
+   755→    }
+   756→    let cancelled = false
+   757→    setLoadingProdutos(true)
+   758→    const seg = `&segmento=${encodeURIComponent(segmentoFilter)}`
+   759→    const q = searchProduto.trim() ? `&busca=${encodeURIComponent(searchProduto.trim())}` : ''
+   760→    api<{ produtos: any[] }>(`/api/produtos/mais-baratos?limit=30${seg}${q}`)
+   761→      .then((d) => {
+   762→        if (!cancelled) {
+   763→          setMaisBaratos(d.produtos || [])
+   764→          if (searchProduto.trim().length >= 2 && (d.produtos || []).length > 0) {
+   765→            addSearchTerm(searchProduto.trim())
+   766→            setSearchHistory(loadSearchHistory())
+   767→          }
+   768→        }
+   769→      })
+   770→      .catch(() => {})
+   771→      .finally(() => {
+   772→        if (!cancelled) setLoadingProdutos(false)
+   773→      })
+   774→    return () => { cancelled = true }
+   775→  }, [searchProduto, segmentoFilter])
+   776→
+   777→  // Unique cities
+   778→  const cities = useMemo(() => {
+   779→    const set = new Set(mercados.map((m) => `${m.cidade}/${m.estado}`))
+   780→    return Array.from(set).sort()
+   781→  }, [mercados])
+   782→
+   783→  // Filtered markets by segment, name/city
+   784→  const filtered = useMemo(() => {
+   785→    let list = mercados
+   786→    if (segmentoFilter) {
+   787→      list = list.filter((m) => (m.segmento || 'mercados') === segmentoFilter)
+   788→    }
+   789→    if (cityFilter !== 'all') {
+   790→      list = list.filter(
+   791→        (m) => `${m.cidade}/${m.estado}` === cityFilter,
+   792→      )
+   793→    }
+   794→    if (searchMercado.trim()) {
+   795→      const q = searchMercado.toLowerCase().trim()
+   796→      list = list.filter(
+   797→        (m) =>
+   798→          m.nome.toLowerCase().includes(q) ||
+   799→          m.cidade.toLowerCase().includes(q) ||
+   800→          m.estado.toLowerCase().includes(q),
+   801→      )
+   802→    }
+   803→    return list
+   804→  }, [mercados, segmentoFilter, cityFilter, searchMercado])
+   805→
+   806→  // Destaques that are NOT in the filtered list (to avoid duplicates)
+   807→  const destaquesUnicos = useMemo(() => {
+   808→    const ids = new Set(filtered.map((m) => m.id))
+   809→    return destaques.filter((d) => ids.has(d.id))
+   810→  }, [destaques, filtered])
+   811→
+   812→  // Registra visualização de mercado (fire-and-forget)
+   813→  const registrarVisualizacaoMercado = useCallback((mid: string) => {
+   814→    api('/api/clique', {
+   815→      method: 'POST',
+   816→      body: JSON.stringify({ mercadoId: mid, sessionId, tipo: 'mercado' }),
+   817→    }).catch(() => {})
+   818→  }, [sessionId])
+   819→
+   820→  // Abre mercado + registra visualização
+   821→  const openMercado = useCallback((mid: string, mode: 'produtos' | 'catalogo' = 'produtos') => {
+   822→    setDetailMode(mode)
+   823→    setSelectedMercado(mid)
+   824→    registrarVisualizacaoMercado(mid)
+   825→  }, [registrarVisualizacaoMercado])
+   826→
+   827→  // ── Initial loading ──
+   828→  if (loading) {
+   829→    return <HomeLoading />
+   830→  }
+   831→
+   832→  // ── Detail mode ─────────────────────────────────────────────────────
+   833→  if (selectedMercado) {
+   834→    return (
+   835→      <MarketDetailView
+   836→        key={selectedMercado + detailMode}
+   837→        mercadoId={selectedMercado}
+   838→        onBack={() => setSelectedMercado(null)}
+   839→        sessionId={sessionId}
+   840→        onAddToList={onAddToList}
+   841→        initialMode={detailMode}
+   842→      />
+   843→    )
+   844→  }
+   845→
+   846→  // ── Segmento ainda não escolhido — tela de seleção ────────────────
+   847→  if (!segmentoFilter) {
+   848→    return (
+   849→      <div className="space-y-6 py-4">
+   850→        <div className="text-center space-y-2">
+   851→          <h2 className="text-lg font-bold text-gray-800">Escolha o tipo de comércio</h2>
+   852→          <p className="text-sm text-gray-500">e veja todas as promoções disponíveis</p>
+   853→        </div>
+   854→        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-lg mx-auto">
+   855→          {[
+   856→            { value: 'mercados', label: 'Supermercados', icon: <ShoppingCart className="h-8 w-8" />, desc: 'Promoções de supermercados e mercearias' },
+   857→            { value: 'farmacias', label: 'Farmácias', icon: <Package className="h-8 w-8" />, desc: 'Ofertas de farmácias e drogarias' },
+   858→            { value: 'petshops', label: 'PetShops', icon: <PawPrint className="h-8 w-8" />, desc: 'Promoções para seu pet' },
+   859→          ].map((seg) => (
+   860→            <motion.button
+   861→              key={seg.value}
+   862→              whileHover={{ scale: 1.03 }}
+   863→              whileTap={{ scale: 0.97 }}
+   864→              onClick={() => setSegmentoFilter(seg.value)}
+   865→              className="flex flex-col items-center gap-3 p-5 bg-white border-2 border-gray-200 hover:border-red-400 rounded-2xl transition-all hover:shadow-md text-center"
+   866→            >
+   867→              <div className="text-red-600">{seg.icon}</div>
+   868→              <div>
+   869→                <p className="font-semibold text-gray-800 text-sm">{seg.label}</p>
+   870→                <p className="text-[11px] text-gray-400 mt-0.5">{seg.desc}</p>
+   871→              </div>
+   872→            </motion.button>
+   873→          ))}
+   874→        </div>
+   875→      </div>
+   876→    )
+   877→  }
+   878→
+   879→  const segmentoLabel = segmentoFilter === 'farmacias' ? 'Farmácias' : segmentoFilter === 'petshops' ? 'PetShops' : 'Supermercados'
+   880→
+   881→  return (
+   882→    <div className="space-y-5">
+   883→
+   884→      {/* ═══════════════════════════════════════════════════════════════
+   885→          SEÇÃO 0: Filtro de Tipo de Comércio (trocar segmento)
+   886→          ═══════════════════════════════════════════════════════════════ */}
+   887→      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+   888→        <span className="text-xs text-gray-500 shrink-0">Tipo de Comércio:</span>
+   889→        {[
+   890→          { value: 'mercados', label: 'Supermercados' },
+   891→          { value: 'farmacias', label: 'Farmácias' },
+   892→          { value: 'petshops', label: 'PetShops' },
+   893→        ].map((seg) => (
+   894→          <button
+   895→            key={seg.value}
+   896→            onClick={() => {
+   897→              setSegmentoFilter(seg.value)
+   898→              setSearchProduto('')
+   899→            }}
+   900→            className={cn(
+   901→              'px-3 py-1.5 text-xs font-medium rounded-full border transition-colors shrink-0',
+   902→              segmentoFilter === seg.value
+   903→                ? 'bg-red-600 text-white border-red-600'
+   904→                : 'bg-white text-gray-600 border-gray-200 hover:border-red-300 hover:text-red-600'
+   905→            )}
+   906→          >
+   907→            {seg.label}
+   908→          </button>
+   909→        ))}
+   910→      </div>
+   911→
+   912→
+   913→      {/* ═══════════════════════════════════════════════════════════════
+   914→          SEÇÃO 1: Itens mais baratos em promoção (com busca por produto)
+   915→          ═══════════════════════════════════════════════════════════════ */}
+   916→      <section>
+   917→        <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
+   918→          <Tag className="h-4 w-4 text-red-600" /> Itens mais baratos em promoção
+   919→        </h2>
+   920→
+   921→        {/* Busca por produto */}
+   922→        <div className="relative mb-1">
+   923→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+   924→          <Input
+   925→            placeholder="Buscar produto (ex: arroz, leite, feijão...)"
+   926→            className="pl-9 h-10"
+   927→            value={searchProduto}
+   928→            onChange={(e) => setSearchProduto(e.target.value)}
+   929→          />
+   930→        </div>
+   931→
+   932→        {/* Últimas buscas */}
+   933→        {!searchProduto.trim() && searchHistory.length > 0 && (
+   934→          <div className="flex items-center gap-1.5 flex-wrap mb-3">
+   935→            <Clock className="h-3 w-3 text-gray-400 shrink-0" />
+   936→            <span className="text-[10px] text-gray-400 uppercase tracking-wide shrink-0">Últimas buscas</span>
+   937→            {searchHistory.slice(0, 6).map((entry) => (
+   938→              <motion.button
+   939→                key={entry.text}
+   940→                whileTap={{ scale: 0.95 }}
+   941→                onClick={() => setSearchProduto(entry.text)}
+   942→                className="group flex items-center gap-1 bg-gray-100 hover:bg-red-50 text-gray-600 hover:text-red-700 text-xs px-2.5 py-1 rounded-full transition-colors"
+   943→              >
+   944→                <span className="truncate max-w-[120px]">{entry.text}</span>
+   945→                <X
+   946→                  className="h-2.5 w-2.5 text-gray-300 group-hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+   947→                  onClick={(e) => { e.stopPropagation(); removeSearchTerm(entry.text); setSearchHistory(loadSearchHistory()) }}
+   948→                />
+   949→              </motion.button>
+   950→            ))}
+   951→          </div>
+   952→        )}
+   953→
+   954→        {loadingProdutos ? (
+   955→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+   956→            {Array.from({ length: 8 }).map((_, i) => (
+   957→              <Skeleton key={i} className="h-28 rounded-lg" />
+   958→            ))}
+   959→          </div>
+   960→        ) : maisBaratos.length === 0 ? (
+   961→          <div className="text-center py-8 text-gray-400">
+   962→            <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+   963→            <p className="text-sm">
+   964→              {searchProduto
+   965→                ? 'Nenhum produto encontrado para esta busca'
+   966→                : 'Nenhum produto em promoção no momento'}
+   967→            </p>
+   968→          </div>
+   969→        ) : (
+   970→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+   971→            {maisBaratos.slice(0, 12).map((p) => {
+   972→              const mId = p.mercado?.id || p.mercadoId || ''
+   973→              return (
+   974→              <motion.button
+   975→                key={p.id}
+   976→                whileTap={{ scale: 0.97 }}
+   977→                onClick={() => {
+   978→                  // Registra clique do produto no BI
+   979→                  api('/api/clique', {
+   980→                    method: 'POST',
+   981→                    body: JSON.stringify({ produtoId: p.id, mercadoId: mId, sessionId, tipo: 'produto' }),
+   982→                  }).catch(() => {})
+   983→                  onAddToList({
+   984→                    produtoId: p.id,
+   985→                    mercadoId: mId,
+   986→                    nome: p.nome,
+   987→                    marca: p.marca,
+   988→                    preco: p.preco,
+   989→                    unidade: p.unidade,
+   990→                    mercadoNome: p.mercado?.nome,
+   991→                    mercadoCidade: p.mercado?.cidade ? `${p.mercado.cidade}/${p.mercado.estado}` : undefined,
+   992→                  })
+   993→                }}
+   994→                className="text-left bg-white border border-gray-200 rounded-lg p-2.5 hover:border-red-300 hover:shadow-sm transition-all relative group"
+   995→              >
+   996→                {/* Badget do mercado */}
+   997→                <p className="text-[10px] text-gray-400 truncate flex items-center gap-0.5">
+   998→                  <Store className="h-2.5 w-2.5" />
+   999→                  {p.mercado?.nome || '—'}
+  1000→                </p>
+  1001→                <p className="text-xs font-medium text-gray-800 leading-tight mt-0.5 line-clamp-2">
+  1002→                  {p.nome}
+  1003→                </p>
+  1004→                {p.marca && (
+  1005→                  <p className="text-[10px] text-gray-500 truncate">{p.marca}</p>
+  1006→                )}
+  1007→                <div className="flex items-center justify-between mt-1.5">
+  1008→                  <p className="text-sm font-bold text-red-600">{p.preco}</p>
+  1009→                  <Plus className="h-4 w-4 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+  1010→                </div>
+  1011→                {p.unidade && (
+  1012→                  <p className="text-[10px] text-gray-400">{p.unidade}</p>
+  1013→                )}
+  1014→              </motion.button>
+  1015→              )
+  1016→            })}
+  1017→          </div>
+  1018→        )}
+  1019→      </section>
+  1020→
+  1021→      {/* ═══════════════════════════════════════════════════════════════
+  1022→          SEÇÃO 2: Empresas em destaque (patrocinadas)
+  1023→          ═══════════════════════════════════════════════════════════════ */}
+  1024→      {destaquesUnicos.length > 0 && (
+  1025→        <section>
+  1026→          <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
+  1027→            <Star className="h-4 w-4 text-amber-500" /> Empresas em destaque
+  1028→          </h2>
+  1029→          <ScrollArea className="w-full" ref={scrollRef}>
+  1030→            <div className="flex gap-4 pb-2">
+  1031→              {destaquesUnicos.map((m) => (
+  1032→                <DestaqueCard
+  1033→                  key={m.id}
+  1034→                  m={m}
+  1035→                  onClick={() => openMercado(m.id)}
+  1036→                />
+  1037→              ))}
+  1038→            </div>
+  1039→            <ScrollBar orientation="horizontal" />
+  1040→          </ScrollArea>
+  1041→        </section>
+  1042→      )}
+  1043→
+  1044→      {/* ═══════════════════════════════════════════════════════════════
+  1045→          SEÇÃO 3: Todas as empresas cadastradas (com busca e filtro por região)
+  1046→          ═══════════════════════════════════════════════════════════════ */}
+  1047→      <section>
+  1048→        <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
+  1049→          <Store className="h-4 w-4 text-red-600" /> Empresas
+  1050→        </h2>
+  1051→
+  1052→        {/* Search + Region Filter */}
+  1053→        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+  1054→          <div className="relative flex-1">
+  1055→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+  1056→            <Input
+  1057→              placeholder="Buscar empresa por nome..."
+  1058→              className="pl-9 h-10"
+  1059→              value={searchMercado}
+  1060→              onChange={(e) => setSearchMercado(e.target.value)}
+  1061→            />
+  1062→          </div>
+  1063→          <Select value={cityFilter} onValueChange={setCityFilter}>
+  1064→            <SelectTrigger className="w-full sm:w-[200px] h-10">
+  1065→              <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+  1066→              <SelectValue placeholder="Todas as regiões" />
+  1067→            </SelectTrigger>
+  1068→            <SelectContent>
+  1069→              <SelectItem value="all">Todas as regiões</SelectItem>
+  1070→              {cities.map((c) => (
+  1071→                <SelectItem key={c} value={c}>
+  1072→                  {c}
+  1073→                </SelectItem>
+  1074→              ))}
+  1075→            </SelectContent>
+  1076→          </Select>
+  1077→        </div>
+  1078→
+  1079→        {loading ? (
+  1080→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  1081→            {Array.from({ length: 6 }).map((_, i) => (
+  1082→              <Skeleton key={i} className="h-44 rounded-xl" />
+  1083→            ))}
+  1084→          </div>
+  1085→        ) : filtered.length === 0 ? (
+  1086→          <div className="text-center py-16 text-gray-400">
+  1087→            <Search className="h-10 w-10 mx-auto mb-3 opacity-50" />
+  1088→            <p className="text-sm">Nenhuma empresa encontrada</p>
+  1089→            <p className="text-xs mt-1">Tente ajustar os filtros de busca ou região</p>
+  1090→          </div>
+  1091→        ) : (
+  1092→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  1093→            {filtered.map((m) => (
+  1094→              <MarketCard
+  1095→                key={m.id}
+  1096→                m={m}
+  1097→                onCatalogo={() => openMercado(m.id, 'catalogo')}
+  1098→                onProdutos={() => openMercado(m.id, 'produtos')}
+  1099→              />
+  1100→            ))}
+  1101→          </div>
+  1102→        )}
+  1103→      </section>
+  1104→    </div>
+  1105→  )
+  1106→}

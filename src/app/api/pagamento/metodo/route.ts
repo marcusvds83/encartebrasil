@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
 
-const ODOO_WEBHOOK_URL = 'https://www.panfletosbrasil.3codenexus.com.br/web/hook/4c25f535-5267-437f-92a8-fdf0e164fff2'
+// ── Webhook CRM Odoo — cria oportunidade no estágio 1 ──
+const ODOO_CRM_WEBHOOK_URL = 'https://www.panfletosbrasil.3codenexus.com.br/web/hook/4c25f535-5267-437f-92a8-fdf0e164fff2'
 
 const METODOS_VALIDOS = ['pix', 'cartao_mensal', 'cartao_recorrente', 'boleto'] as const
 type MetodoPagamento = (typeof METODOS_VALIDOS)[number]
@@ -14,34 +15,21 @@ const METODO_LABEL: Record<string, string> = {
   boleto: 'Boleto Bancário',
 }
 
-/** Normaliza segmento para o formato exato que o Odoo espera */
-function normalizarSegmento(seg: string): string {
-  const s = (seg || '').toLowerCase().trim()
+/** Normaliza o segmento para o formato exato que o Odoo CRM espera */
+function normalizarSegmento(seg: string | null | undefined): string {
+  if (!seg) return ''
+  const s = seg.toLowerCase().trim()
   if (s === 'mercados' || s === 'mercado') return 'Mercados'
   if (s === 'petshops' || s === 'petshop' || s === 'pet shops') return 'PetShops'
-  if (s === 'farmácias' || s === 'farmacias' || s === 'farmácia' || s === 'farmacia') return 'Farmácias'
-  return seg || ''
-}
-
-/** Envia payload para o webhook Odoo e loga resultado */
-async function enviarWebhook(url: string, payload: object): Promise<void> {
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    const body = await res.text()
-    console.log(`[webhook Odoo] status=${res.status} body=${body}`)
-  } catch (err: any) {
-    console.error(`[webhook Odoo] FALHA: ${err?.message || err}`)
-  }
+  if (s === 'farmácias' || s === 'farmacia' || s === 'farmacias') return 'Farmácias'
+  return ''
 }
 
 /**
  * POST /api/pagamento/metodo
  * Empresa escolhe a forma de pagamento → salva no DB + envia webhook para Odoo CRM.
- * O webhook cria uma nova oportunidade com todos os dados da empresa + contato + escolha de pagamento.
+ * O webhook cria uma oportunidade no estágio 1 do CRM.
+ * Formulários (contato) criam chamados no Helpdesk — este endpoint cria cards no CRM.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -72,54 +60,60 @@ export async function POST(req: NextRequest) {
       dataEscolhaPagamento: new Date().toISOString(),
     })
 
-    // Monta descrição com a escolha de pagamento (campo description do Odoo)
-    const metodoLabel = METODO_LABEL[metodo] || metodo
-    const recorrente = metodo === 'cartao_recorrente'
+    // Monta o payload com os campos exatos que o Odoo CRM espera
     const segmentoNorm = normalizarSegmento(empresa.segmento)
-    const descricao = [
-      `ESCOLHA DE PAGAMENTO`,
-      `Forma escolhida: ${metodoLabel}`,
-      `Recorrente: ${recorrente ? 'Sim' : 'Não'}`,
-      `Valor da mensalidade: R$ ${empresa.mensalidade || 399},00`,
-      `Data da escolha: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
-      '',
-      `DADOS DA EMPRESA`,
-      `Empresa: ${empresa.nome}`,
-      `CNPJ: ${empresa.cnpj}`,
-      `Cidade/UF: ${empresa.cidade}/${empresa.estado}`,
-      `Segmento: ${segmentoNorm}`,
-      `E-mail: ${empresa.emailLogin}`,
-      `Telefone: ${empresa.telefone || 'Não informado'}`,
-      '',
-      `CONTATO DA EMPRESA`,
-      `Responsável: ${empresa.responsavel || 'Não informado'}`,
-      `CPF: ${empresa.cpf || 'Não informado'}`,
-    ].join('\n')
+    const metodoLabel = METODO_LABEL[metodo] || metodo
+    const valorMensalidade = empresa.mensalidade || 399
 
-    // Payload nos campos que a ação do servidor Odoo lê (conforme documento)
-    const odooPayload = {
-      nome_empresa: empresa.nome,
-      cnpj: empresa.cnpj,
-      email_empresa: empresa.emailLogin,
+    const crmPayload = {
+      // ── Empresa ──
+      nome_empresa: empresa.nome || '',
+      cnpj: empresa.cnpj || '',
+      email_empresa: empresa.emailLogin || session.email || '',
       telefone_empresa: empresa.telefone || '',
       segmento: segmentoNorm,
-      nome_contato: empresa.responsavel || '',
+
+      // ── Contato da empresa (responsável) ──
+      nome_contato: empresa.responsavel || empresa.nome || '',
       cpf: empresa.cpf || '',
-      telefone_contato: empresa.telefone || '',
-      email_contato: empresa.emailLogin,
-      nome: `Pagamento — ${empresa.nome} — ${metodoLabel}`,
-      description: descricao,
+      telefone_contato: empresa.telefoneResponsavel || empresa.telefone || '',
+      email_contato: empresa.emailLogin || session.email || '',
+
+      // ── Dados da oportunidade ──
+      name: `Pagamento — ${empresa.nome} (${metodoLabel})`,
+      description: [
+        `FORMA DE PAGAMENTO ESCOLHIDA: ${metodoLabel}`,
+        `Valor: R$ ${valorMensalidade},00/mês`,
+        metodo === 'cartao_recorrente' ? 'Modalidade: Recorrente (cobrança automática mensal)' : 'Modalidade: Mensal (escolhe todo mês)',
+        '',
+        `Cidade/Estado: ${empresa.cidade || ''}/${empresa.estado || ''}`,
+        `Data da escolha: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
+        `ID interno: ${session.id}`,
+      ].join('\n'),
     }
 
-    console.log(`[pagamento/metodo] webhook payload: ${JSON.stringify(odooPayload)}`)
-
-    // Dispara webhook para Odoo CRM
-    await enviarWebhook(ODOO_WEBHOOK_URL, odooPayload)
+    // Fire-and-forget webhook para Odoo CRM
+    console.log(`[pagamento/metodo] Enviando para CRM Odoo: ${JSON.stringify(crmPayload)}`)
+    fetch(ODOO_CRM_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(crmPayload),
+    })
+      .then((res) => {
+        if (res.ok) {
+          console.log(`[pagamento/metodo] CRM OK — status ${res.status}`)
+        } else {
+          res.text().then((t) => console.error(`[pagamento/metodo] CRM erro ${res.status}: ${t}`))
+        }
+      })
+      .catch((err) => {
+        console.error('[pagamento/metodo] erro ao enviar webhook CRM:', err)
+      })
 
     return NextResponse.json({
       ok: true,
       metodo,
-      metodoLabel,
+      metodoLabel: METODO_LABEL[metodo],
       mensagem: 'Solicitação enviada! O administrador enviará o contrato e link de pagamento por e-mail.',
     })
   } catch (e) {
