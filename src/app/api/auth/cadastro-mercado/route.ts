@@ -4,6 +4,17 @@ import { sessionCookie, type SessionData } from '@/lib/auth'
 import { createHash } from 'crypto'
 import { emailBoasVindasMercado } from '@/lib/email'
 
+const ODOO_WEBHOOK_URL = 'https://www.panfletosbrasil.3codenexus.com.br/web/hook/b402d845-2a4f-4ad3-a6d7-de646f34285c'
+
+/** Normaliza segmento para o formato exato que o Odoo espera */
+function normalizarSegmento(seg: string): string {
+  const s = (seg || '').toLowerCase().trim()
+  if (s === 'mercados' || s === 'mercado') return 'Mercados'
+  if (s === 'petshops' || s === 'petshop' || s === 'pet shops') return 'PetShops'
+  if (s === 'farmácias' || s === 'farmacias' || s === 'farmácia' || s === 'farmacia') return 'Farmácias'
+  return seg || ''
+}
+
 function soDigitos(s: string) {
   return (s || '').replace(/\D/g, '')
 }
@@ -106,6 +117,32 @@ export async function POST(req: NextRequest) {
     // Envia e-mail de boas-vindas (fire-and-forget, loga resultado)
     emailBoasVindasMercado(nome, email).then((ok) => {
       console.log(`[cadastro-mercado] email boas-vindas: ${ok ? 'ENVIADO' : 'FALHOU'}`)
+    })
+
+    // Envia dados do cadastro para o webhook Odoo CRM (fire-and-forget)
+    // Cria uma nova oportunidade no estágio 1 com todos os dados da empresa e contato
+    const segmentoNormalizado = normalizarSegmento(segmento)
+    const odooPayload = {
+      nome_empresa: nome,
+      cnpj: cnpjLimpo,
+      email_empresa: email,
+      telefone_empresa: telefone || '',
+      segmento: segmentoNormalizado,
+      nome_contato: responsavel,
+      cpf: cpfLimpo,
+      telefone_contato: telefone || '',
+      email_contato: email,
+      titulo: `Novo Cadastro — ${nome}`,
+      descricao: `Empresa: ${nome}\nCNPJ: ${cnpjLimpo}\nCidade/UF: ${cidade}/${estado.toUpperCase()}\nSegmento: ${segmentoNormalizado}\nResponsável: ${responsavel}\nCPF do Responsável: ${cpfLimpo}\nE-mail: ${email}\nTelefone: ${telefone || 'Não informado'}\nEndereço: ${endereco || 'Não informado'}\n\nCadastro realizado em: ${agora.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}\nStatus: Piloto (60 dias grátis)`,
+    }
+    fetch(ODOO_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(odooPayload),
+    }).then((r) => {
+      console.log(`[cadastro-mercado] webhook Odoo status: ${r.status}`)
+    }).catch((err) => {
+      console.error('[cadastro-mercado] erro webhook Odoo:', err)
     })
 
     return res

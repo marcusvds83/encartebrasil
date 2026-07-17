@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
 
-const ODOO_WEBHOOK_URL = 'https://panfletosbrasil.odoo.com/web/hook/a1968b1c-2885-46f2-b77b-88cd76337459'
-const ODOO_API_KEY = 'dfb4bca4b7563ed7fa4f7664d1d61ef2fdf9a4ee'
+const ODOO_WEBHOOK_URL = 'https://www.panfletosbrasil.3codenexus.com.br/web/hook/b402d845-2a4f-4ad3-a6d7-de646f34285c'
 
 const METODOS_VALIDOS = ['pix', 'cartao_mensal', 'cartao_recorrente', 'boleto'] as const
 type MetodoPagamento = (typeof METODOS_VALIDOS)[number]
@@ -15,9 +14,19 @@ const METODO_LABEL: Record<string, string> = {
   boleto: 'Boleto Bancário',
 }
 
+/** Normaliza segmento para o formato exato que o Odoo espera */
+function normalizarSegmento(seg: string): string {
+  const s = (seg || '').toLowerCase().trim()
+  if (s === 'mercados' || s === 'mercado') return 'Mercados'
+  if (s === 'petshops' || s === 'petshop' || s === 'pet shops') return 'PetShops'
+  if (s === 'farmácias' || s === 'farmacias' || s === 'farmácia' || s === 'farmacia') return 'Farmácias'
+  return seg || ''
+}
+
 /**
  * POST /api/pagamento/metodo
- * Empresa escolhe a forma de pagamento → salva no DB + envia webhook para Odoo.
+ * Empresa escolhe a forma de pagamento → salva no DB + envia webhook para Odoo CRM.
+ * O webhook cria uma nova oportunidade com todos os dados da empresa + contato + escolha de pagamento.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -34,10 +43,9 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Busca dados da empresa
+    // Busca dados completos da empresa
     const empresa: any = await db.mercado.findUnique({
       where: { id: session.id },
-      select: { nome: true, emailLogin: true, cnpj: true, cidade: true, estado: true, mensalidade: true },
     })
     if (!empresa) {
       return NextResponse.json({ erro: 'Empresa não encontrada' }, { status: 404 })
@@ -49,31 +57,53 @@ export async function POST(req: NextRequest) {
       dataEscolhaPagamento: new Date().toISOString(),
     })
 
-    // Envia webhook para Odoo — contrato + link de pagamento
-    const webhookPayload = {
-      evento: 'escolha_pagamento',
-      tipo: 'panfletos_brasil',
-      api_key: ODOO_API_KEY,
-      dados: {
-        empresa_id: session.id,
-        empresa_nome: empresa.nome,
-        empresa_email: empresa.emailLogin,
-        empresa_cnpj: empresa.cnpj,
-        empresa_cidade: empresa.cidade,
-        empresa_estado: empresa.estado,
-        forma_pagamento: METODO_LABEL[metodo] || metodo,
-        metodo_key: metodo,
-        valor_mensalidade: empresa.mensalidade || 399,
-        recorrente: metodo === 'cartao_recorrente',
-        data_escolha: new Date().toISOString(),
-      },
+    // Monta descrição com a escolha de pagamento (campo description do Odoo)
+    const metodoLabel = METODO_LABEL[metodo] || metodo
+    const recorrente = metodo === 'cartao_recorrente'
+    const descricao = [
+      `ESCOLHA DE PAGAMENTO`,
+      `Forma escolhida: ${metodoLabel}`,
+      `Recorrente: ${recorrente ? 'Sim' : 'Não'}`,
+      `Valor da mensalidade: R$ ${empresa.mensalidade || 399},00`,
+      `Data da escolha: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
+      '',
+      `DADOS DA EMPRESA`,
+      `Empresa: ${empresa.nome}`,
+      `CNPJ: ${empresa.cnpj}`,
+      `Cidade/UF: ${empresa.cidade}/${empresa.estado}`,
+      `Segmento: ${normalizarSegmento(empresa.segmento)}`,
+      `E-mail: ${empresa.emailLogin}`,
+      `Telefone: ${empresa.telefone || 'Não informado'}`,
+      '',
+      `CONTATO DA EMPRESA`,
+      `Responsável: ${empresa.responsavel || 'Não informado'}`,
+      `CPF: ${empresa.cpf || 'Não informado'}`,
+    ].join('\n')
+
+    // Envia webhook para Odoo — nova oportunidade com dados completos
+    const odooPayload = {
+      nome_empresa: empresa.nome,
+      cnpj: empresa.cnpj,
+      email_empresa: empresa.emailLogin,
+      telefone_empresa: empresa.telefone || '',
+      segmento: normalizarSegmento(empresa.segmento),
+      nome_contato: empresa.responsavel || '',
+      cpf: empresa.cpf || '',
+      telefone_contato: empresa.telefone || '',
+      email_contato: empresa.emailLogin,
+      titulo: `Pagamento — ${empresa.nome} — ${metodoLabel}`,
+      descricao,
     }
+
+    console.log(`[pagamento/metodo] enviando webhook Odoo: ${JSON.stringify(odooPayload)}`)
 
     // Fire-and-forget webhook para Odoo
     fetch(ODOO_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(webhookPayload),
+      body: JSON.stringify(odooPayload),
+    }).then((r) => {
+      console.log(`[pagamento/metodo] webhook Odoo status: ${r.status}`)
     }).catch((err) => {
       console.error('[pagamento/metodo] erro ao enviar webhook Odoo:', err)
     })
@@ -81,7 +111,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       metodo,
-      metodoLabel: METODO_LABEL[metodo],
+      metodoLabel,
       mensagem: 'Solicitação enviada! O administrador enviará o contrato e link de pagamento por e-mail.',
     })
   } catch (e) {
