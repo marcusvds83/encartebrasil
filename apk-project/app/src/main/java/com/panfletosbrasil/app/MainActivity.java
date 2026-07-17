@@ -50,7 +50,15 @@ public class MainActivity extends Activity {
             settings.setAllowFileAccess(true);
             settings.setCacheMode(WebSettings.LOAD_DEFAULT);
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-            settings.setUserAgentString(settings.getUserAgentString() + " PanfletosBrasilApp/1.0");
+            // User-Agent: remove "; wv" para evitar Google "disallowed_useragent"
+            // O Google bloqueia OAuth em WebViews detectando "; wv" no UA
+            String originalUA = settings.getUserAgentString();
+            String cleanUA = originalUA
+                .replaceAll(";\\s*wv\\b", "")
+                .replaceAll("\\s{2,}", " ")
+                .trim()
+                + " PanfletosBrasilApp/1.0";
+            settings.setUserAgentString(cleanUA);
             settings.setUseWideViewPort(true);
             settings.setLoadWithOverviewMode(true);
 

@@ -232,14 +232,47 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
   const [segmento, setSegmento] = useState('')
   const [googleLoading, setGoogleLoading] = useState(false)
 
+  // ── Detecta se está rodando dentro de um WebView (Android APK) ──
+  // Nota: o UA do WebView tem "; wv" removido no Android para evitar bloqueio do Google,
+  // então detectamos pelo identificador customizado "PanfletosBrasilApp"
+  const isWebView = typeof navigator !== 'undefined' && /PanfletosBrasilApp/i.test(navigator.userAgent)
+
+  // ── Google Redirect Result (para login via redirect no WebView) ──
+  useEffect(() => {
+    if (!isWebView) return // Só precisa no WebView
+    const checkRedirectResult = async () => {
+      try {
+        const { getRedirectResult } = await import('firebase/auth')
+        const { getFirebaseAuth } = await import('@/lib/firebase')
+        const auth = getFirebaseAuth()
+        if (!auth) return
+
+        const result = await getRedirectResult(auth)
+        if (result?.user) {
+          setGoogleLoading(true)
+          const idToken = await result.user.getIdToken()
+          await api('/api/auth/google-login', {
+            method: 'POST',
+            body: JSON.stringify({ idToken }),
+          })
+          toast.success('Login com Google realizado!')
+          onLogin()
+        }
+      } catch (err) {
+        console.error('[Google Redirect] erro:', err)
+      } finally {
+        setGoogleLoading(false)
+      }
+    }
+    checkRedirectResult()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // ── Google Login (Consumidor) ──
   const handleGoogleLogin = async () => {
     setGoogleLoading(true)
     try {
-      // Importa dinamicamente o Firebase Auth client-side
-      const { getAuth, signInWithPopup, GoogleAuthProvider } = await import('firebase/auth')
       const { getFirebaseAuth } = await import('@/lib/firebase')
-
       const auth = getFirebaseAuth()
       if (!auth) {
         toast.error('Firebase não configurado. Use e-mail e senha.')
@@ -247,20 +280,29 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
         return
       }
 
+      const { GoogleAuthProvider } = await import('firebase/auth')
       const provider = new GoogleAuthProvider()
-      const result = await signInWithPopup(auth, provider)
-      const idToken = await result.user.getIdToken()
 
-      // Envia o token para o backend
-      await api('/api/auth/google-login', {
-        method: 'POST',
-        body: JSON.stringify({ idToken }),
-      })
+      if (isWebView) {
+        // WebView: usa redirect (o UA é limpo no Android para evitar disallowed_useragent)
+        const { signInWithRedirect } = await import('firebase/auth')
+        await signInWithRedirect(auth, provider)
+        // O fluxo continua no useEffect getRedirectResult acima
+      } else {
+        // Navegador normal: usa popup
+        const { signInWithPopup } = await import('firebase/auth')
+        const result = await signInWithPopup(auth, provider)
+        const idToken = await result.user.getIdToken()
 
-      toast.success('Login com Google realizado!')
-      onLogin()
+        await api('/api/auth/google-login', {
+          method: 'POST',
+          body: JSON.stringify({ idToken }),
+        })
+
+        toast.success('Login com Google realizado!')
+        onLogin()
+      }
     } catch (err: any) {
-      // Popup fechado pelo usuário = ignorar
       if (err?.code === 'auth/popup-closed-by-user') {
         setGoogleLoading(false)
         return
