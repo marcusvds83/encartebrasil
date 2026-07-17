@@ -20,12 +20,13 @@ export async function POST(req: NextRequest) {
     console.log(`[login] tentativa: email=${email?.slice(0, 3)}*** tipo=${tipo || 'n/a'} tipoLogin=${tipoLogin || 'n/a'} uid=${uid ? 'sim' : 'nao'}`)
 
     // ════════════════════════════════════════════════════════════════════
-    // 1) LOGIN SOCIAL (Firebase) — DESATIVADO
-    // Removido Google login. Apenas e-mail/senha.
+    // 1) LOGIN SOCIAL (Firebase) — via endpoint separado /api/auth/google-login
+    // Consumidores usam Google via popup → token → /api/auth/google-login
+    // Empresas sempre usam CNPJ + e-mail + senha
     // ════════════════════════════════════════════════════════════════════
     if (uid && provider) {
       return NextResponse.json(
-        { erro: 'Login social desativado. Use e-mail e senha.' },
+        { erro: 'Use o botão "Entrar com Google" para login social.' },
         { status: 400 },
       )
     }
