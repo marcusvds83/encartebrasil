@@ -14,8 +14,9 @@ export async function GET() {
         emailLogin: true, status: true, destaque: true,
         pilotoInicio: true, pilotoFim: true, mensalidade: true,
         criadoEm: true, logoPath: true, endereco: true, telefone: true, segmento: true,
-        asaasSubscriptionId: true, asaasAssinaturaCancelada: true,
+        formaPagamento: true, dataEscolhaPagamento: true,
         ultimoPagamento: true, ultimoPagamentoValor: true,
+        dataProximoPagamento: true,
       },
     })
     if (!mercado) return NextResponse.json({ erro: 'Empresa não encontrada' }, { status: 404 })
@@ -31,19 +32,24 @@ export async function GET() {
       statusEfetivo = 'piloto_expirado'
     }
 
-    // 2. Aguardando pagamento
+    // 2. Aguardando pagamento (admin ativou mas não pagou)
     if (m.status === 'ativo_aguardando_pagamento') {
       statusEfetivo = 'ativo_aguardando_pagamento'
     }
 
-    // 3. Assinatura cancelada com carência
-    if (m.status === 'ativo' && m.asaasAssinaturaCancelada && m.ultimoPagamento) {
+    // 3. Assinatura cancelada com carência (30 dias após último pagamento)
+    if (m.status === 'ativo' && m.formaPagamento && m.ultimoPagamento && !m.dataProximoPagamento) {
       const diasDesdePagamento = (agora.getTime() - new Date(m.ultimoPagamento).getTime()) / (1000 * 60 * 60 * 24)
       if (diasDesdePagamento > 30) {
         statusEfetivo = 'assinatura_cancelada'
       } else {
         statusEfetivo = 'ativo_carencia'
       }
+    }
+
+    // 4. Próximo pagamento vencido (sem pagar no mês seguinte)
+    if (m.status === 'ativo' && m.dataProximoPagamento && new Date(m.dataProximoPagamento) < agora) {
+      statusEfetivo = 'pagamento_vencido'
     }
 
     // Encartes ativos (concluídos e não expirados)
@@ -60,7 +66,7 @@ export async function GET() {
 
     // Data fim do acesso (para carência)
     let dataFimAcesso: string | null = null
-    if (m.asaasAssinaturaCancelada && m.ultimoPagamento) {
+    if (m.ultimoPagamento && statusEfetivo === 'ativo_carencia') {
       dataFimAcesso = new Date(new Date(m.ultimoPagamento).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
     }
 

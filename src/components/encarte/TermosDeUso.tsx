@@ -98,14 +98,25 @@ export default function TermosDeUso({ tipo, onAceitar, onRecusar }: TermosDeUsoP
 
         {/* 60 dias grátis — apenas empresa */}
         {tipo === 'empresa' && (
-          <div className="bg-green-50 border-b border-green-200 px-5 py-3 shrink-0">
-            <p className="text-sm text-green-800 font-semibold flex items-center gap-1.5">
-              <span className="text-lg">&#127881;</span>
-              60 dias grátis para utilizar o App!
-            </p>
-            <p className="text-xs text-green-700/80 mt-0.5">
-              Após o período gratuito, o próprio App gerará a opção de continuar com a assinatura mensal.
-            </p>
+          <div className="space-y-0 shrink-0">
+            <div className="bg-green-50 border-b border-green-200 px-5 py-3">
+              <p className="text-sm text-green-800 font-semibold flex items-center gap-1.5">
+                <span className="text-lg">&#127881;</span>
+                60 dias grátis para utilizar o App!
+              </p>
+              <p className="text-xs text-green-700/80 mt-0.5">
+                Após o período gratuito, o próprio App gerará a opção de continuar com a assinatura mensal.
+              </p>
+            </div>
+            <div className="bg-blue-50 border-b border-blue-200 px-5 py-3">
+              <p className="text-sm text-blue-800 font-semibold flex items-center gap-1.5">
+                <span className="text-lg">&#128227;</span>
+                Divulgação do Aplicativo
+              </p>
+              <p className="text-xs text-blue-700/80 mt-0.5">
+                Ao aceitar estes termos, a Empresa compromete-se a <strong>divulgar o Panfletos Brasil em suas redes sociais</strong> junto com seus encartes e promoções, para que seu público conheça e utilize o aplicativo. Os retornos de acesso e cliques poderão ser acompanhados nos <strong>insights</strong> da plataforma.
+              </p>
+            </div>
           </div>
         )}
 
@@ -207,7 +218,7 @@ export default function TermosDeUso({ tipo, onAceitar, onRecusar }: TermosDeUsoP
                   <li><strong>Insights e BI:</strong> A plataforma oferece dashboards com métricas de desempenho, cliques, visualizações e dados analíticos dos encartes publicados;</li>
                   <li><strong>Formulário de Contato:</strong> Canal de comunicação direta com a plataforma para suporte técnico, sugestões e reclamações;</li>
                   <li><strong>Edição de Dados:</strong> A empresa pode editar seus dados cadastrais, horários de funcionamento e informações de contato diretamente pela plataforma;</li>
-                  <li><strong>Gestão de Assinatura:</strong> Controle de pagamentos recorrentes e cancelamentos de plano, processados pela plataforma <strong>Asaas</strong>.</li>
+                  <li><strong>Gestão de Assinatura:</strong> Controle de pagamentos e cancelamentos de plano diretamente pela plataforma.</li>
                 </ul>
               </div>
 
@@ -215,10 +226,10 @@ export default function TermosDeUso({ tipo, onAceitar, onRecusar }: TermosDeUsoP
               <div>
                 <h3 className="font-semibold text-gray-800 mb-1">7. Pagamentos e Assinatura</h3>
                 <p>
-                  Os pagamentos das assinaturas são processados pela plataforma <strong>Asaas</strong>, sendo
-                  a empresa responsável pela aplicação a <strong>Credmak Intermediações LTDA</strong>
+                  A empresa responsável pela aplicação é a <strong>Credmak Intermediações LTDA</strong>
                   (CNPJ 49.163.634/0001-54). O período piloto de 60 (sessenta) dias é gratuito.
-                  Após esse período, será gerada automaticamente a opção de continuidade da assinatura mensal.
+                  Após esse período, a empresa deverá escolher a forma de pagamento (Pix, Cartão de Crédito ou Boleto)
+                  e o administrador enviará o contrato e o link de pagamento por e-mail.
                   A empresa poderá cancelar sua assinatura a qualquer momento pela própria plataforma,
                   mantendo o acesso até o final do período já pago.
                 </p>

@@ -15,8 +15,7 @@ export async function GET() {
         totalProdutos: m.totalProdutos || 0,
         totalEncartes: m.totalEncartes || 0,
         totalCliques,
-        asaasSubscriptionId: m.asaasSubscriptionId || null,
-        asaasAssinaturaCancelada: m.asaasAssinaturaCancelada || false,
+        formaPagamento: m.formaPagamento || null,
         ultimoPagamento: m.ultimoPagamento || null,
         _count: { produtos: m.totalProdutos || 0, encartes: m.totalEncartes || 0, cliques: totalCliques },
       }

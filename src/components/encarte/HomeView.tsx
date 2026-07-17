@@ -16,6 +16,8 @@ import {
   Tag,
   Clock,
   X,
+  ShoppingCart,
+  PawPrint,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -41,6 +43,7 @@ interface MercadoSummary {
   nome: string
   cidade: string
   estado: string
+  segmento: string
   logoPath?: string | null
   destaque: boolean
   totalProdutos: number
@@ -712,6 +715,7 @@ export default function HomeView({ sessionId, onAddToList }: HomeViewProps) {
   const [searchHistory, setSearchHistory] = useState<SearchEntry[]>([])
   const [searchMercado, setSearchMercado] = useState('')
   const [cityFilter, setCityFilter] = useState<string>('all')
+  const [segmentoFilter, setSegmentoFilter] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [loadingProdutos, setLoadingProdutos] = useState(true)
   const [selectedMercado, setSelectedMercado] = useState<string | null>(null)
@@ -742,16 +746,21 @@ export default function HomeView({ sessionId, onAddToList }: HomeViewProps) {
     }
   }, [])
 
-  // Fetch mais baratos (with optional search) + salva histórico
+  // Fetch mais baratos (with optional search + segmento) + salva histórico
   useEffect(() => {
+    if (!segmentoFilter) {
+      setMaisBaratos([])
+      setLoadingProdutos(false)
+      return
+    }
     let cancelled = false
     setLoadingProdutos(true)
+    const seg = `&segmento=${encodeURIComponent(segmentoFilter)}`
     const q = searchProduto.trim() ? `&busca=${encodeURIComponent(searchProduto.trim())}` : ''
-    api<{ produtos: any[] }>(`/api/produtos/mais-baratos?limit=30${q}`)
+    api<{ produtos: any[] }>(`/api/produtos/mais-baratos?limit=30${seg}${q}`)
       .then((d) => {
         if (!cancelled) {
           setMaisBaratos(d.produtos || [])
-          // Salva no histórico se a busca teve resultados e tem texto suficiente
           if (searchProduto.trim().length >= 2 && (d.produtos || []).length > 0) {
             addSearchTerm(searchProduto.trim())
             setSearchHistory(loadSearchHistory())
@@ -762,10 +771,8 @@ export default function HomeView({ sessionId, onAddToList }: HomeViewProps) {
       .finally(() => {
         if (!cancelled) setLoadingProdutos(false)
       })
-    return () => {
-      cancelled = true
-    }
-  }, [searchProduto])
+    return () => { cancelled = true }
+  }, [searchProduto, segmentoFilter])
 
   // Unique cities
   const cities = useMemo(() => {
@@ -773,9 +780,12 @@ export default function HomeView({ sessionId, onAddToList }: HomeViewProps) {
     return Array.from(set).sort()
   }, [mercados])
 
-  // Filtered markets by name/city
+  // Filtered markets by segment, name/city
   const filtered = useMemo(() => {
     let list = mercados
+    if (segmentoFilter) {
+      list = list.filter((m) => (m.segmento || 'mercados') === segmentoFilter)
+    }
     if (cityFilter !== 'all') {
       list = list.filter(
         (m) => `${m.cidade}/${m.estado}` === cityFilter,
@@ -791,7 +801,7 @@ export default function HomeView({ sessionId, onAddToList }: HomeViewProps) {
       )
     }
     return list
-  }, [mercados, cityFilter, searchMercado])
+  }, [mercados, segmentoFilter, cityFilter, searchMercado])
 
   // Destaques that are NOT in the filtered list (to avoid duplicates)
   const destaquesUnicos = useMemo(() => {
@@ -814,9 +824,8 @@ export default function HomeView({ sessionId, onAddToList }: HomeViewProps) {
     registrarVisualizacaoMercado(mid)
   }, [registrarVisualizacaoMercado])
 
-  // ── Initial loading — show "buscando melhores produtos" animation ──
-  // Only on first load while both mercados and produtos are being fetched
-  if (loading && loadingProdutos) {
+  // ── Initial loading ──
+  if (loading) {
     return <HomeLoading />
   }
 
@@ -834,8 +843,71 @@ export default function HomeView({ sessionId, onAddToList }: HomeViewProps) {
     )
   }
 
+  // ── Segmento ainda não escolhido — tela de seleção ────────────────
+  if (!segmentoFilter) {
+    return (
+      <div className="space-y-6 py-4">
+        <div className="text-center space-y-2">
+          <h2 className="text-lg font-bold text-gray-800">Escolha o tipo de comércio</h2>
+          <p className="text-sm text-gray-500">e veja todas as promoções disponíveis</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-lg mx-auto">
+          {[
+            { value: 'mercados', label: 'Supermercados', icon: <ShoppingCart className="h-8 w-8" />, desc: 'Promoções de supermercados e mercearias' },
+            { value: 'farmacias', label: 'Farmácias', icon: <Package className="h-8 w-8" />, desc: 'Ofertas de farmácias e drogarias' },
+            { value: 'petshops', label: 'PetShops', icon: <PawPrint className="h-8 w-8" />, desc: 'Promoções para seu pet' },
+          ].map((seg) => (
+            <motion.button
+              key={seg.value}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setSegmentoFilter(seg.value)}
+              className="flex flex-col items-center gap-3 p-5 bg-white border-2 border-gray-200 hover:border-red-400 rounded-2xl transition-all hover:shadow-md text-center"
+            >
+              <div className="text-red-600">{seg.icon}</div>
+              <div>
+                <p className="font-semibold text-gray-800 text-sm">{seg.label}</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">{seg.desc}</p>
+              </div>
+            </motion.button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const segmentoLabel = segmentoFilter === 'farmacias' ? 'Farmácias' : segmentoFilter === 'petshops' ? 'PetShops' : 'Supermercados'
+
   return (
     <div className="space-y-5">
+
+      {/* ═══════════════════════════════════════════════════════════════
+          SEÇÃO 0: Filtro de Tipo de Comércio (trocar segmento)
+          ═══════════════════════════════════════════════════════════════ */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <span className="text-xs text-gray-500 shrink-0">Tipo de Comércio:</span>
+        {[
+          { value: 'mercados', label: 'Supermercados' },
+          { value: 'farmacias', label: 'Farmácias' },
+          { value: 'petshops', label: 'PetShops' },
+        ].map((seg) => (
+          <button
+            key={seg.value}
+            onClick={() => {
+              setSegmentoFilter(seg.value)
+              setSearchProduto('')
+            }}
+            className={cn(
+              'px-3 py-1.5 text-xs font-medium rounded-full border transition-colors shrink-0',
+              segmentoFilter === seg.value
+                ? 'bg-red-600 text-white border-red-600'
+                : 'bg-white text-gray-600 border-gray-200 hover:border-red-300 hover:text-red-600'
+            )}
+          >
+            {seg.label}
+          </button>
+        ))}
+      </div>
 
 
       {/* ═══════════════════════════════════════════════════════════════

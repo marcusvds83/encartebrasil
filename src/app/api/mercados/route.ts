@@ -15,6 +15,7 @@ export async function GET() {
       nome: m.nome,
       cidade: m.cidade,
       estado: m.estado,
+      segmento: m.segmento || 'mercados',
       logoPath: m.logoPath || null,
       destaque: m.destaque || false,
       totalProdutos: m.totalProdutos || 0,

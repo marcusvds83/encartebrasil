@@ -28,6 +28,9 @@ import {
   Calendar,
   Lock,
   QrCode,
+  AlertTriangle,
+  ChevronRight,
+  Banknote,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -79,8 +82,8 @@ interface ContaData {
   endereco?: string | null
   telefone?: string | null
   segmento?: string | null
-  asaasSubscriptionId?: string | null
-  asaasAssinaturaCancelada?: boolean
+  formaPagamento?: string | null
+  dataProximoPagamento?: string | null
   ultimoPagamento?: string | null
   ultimoPagamentoValor?: number | null
   dataFimAcesso?: string | null
@@ -1082,6 +1085,11 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
 
   return (
     <div className="space-y-6">
+      {/* ── Aviso de renovação de assinatura ── */}
+      {isAtivo && conta.formaPagamento && conta.formaPagamento !== 'cartao_recorrente' && conta.dataProximoPagamento && (
+        <RenewalWarningBanner conta={conta} />
+      )}
+
       <Tabs defaultValue="painel">
         <TabsList className="w-full grid grid-cols-3">
           <TabsTrigger value="painel" className="text-xs gap-1.5">
@@ -1660,7 +1668,7 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
                   variant="outline"
                   size="sm"
                   className="border-orange-300 text-orange-700 hover:bg-orange-100 text-xs"
-                  onClick={() => toast.info('Contrato PJ será disponibilizado em breve (integração com Asaas em andamento).')}
+                  onClick={() => toast.info('Contrato PJ será disponibilizado em breve.')}
                 >
                   <FileText className="h-3.5 w-3.5 mr-1.5" />
                   Ver Contrato PJ
@@ -1680,7 +1688,7 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
                   variant="outline"
                   size="sm"
                   className="border-green-300 text-green-700 hover:bg-green-100 text-xs"
-                  onClick={() => toast.info('Contrato PJ será disponibilizado em breve (integração com Asaas em andamento).')}
+                  onClick={() => toast.info('Contrato PJ será disponibilizado em breve.')}
                 >
                   <FileText className="h-3.5 w-3.5 mr-1.5" />
                   Ver Contrato PJ
@@ -1710,77 +1718,23 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
                     Isento durante o piloto
                   </Badge>
                 )}
-                {conta.status === 'ativo' && !conta.asaasAssinaturaCancelada && conta.asaasSubscriptionId && (
+                {conta.status === 'ativo' && conta.formaPagamento === 'cartao_recorrente' && (
                   <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">
                     Recorrente ativo
                   </Badge>
                 )}
               </div>
 
-              {/* Status da assinatura */}
-              {conta.status === 'ativo' && conta.asaasSubscriptionId && (
+              {/* Forma de pagamento atual */}
+              {conta.status === 'ativo' && conta.formaPagamento && (
                 <div className="text-xs text-gray-500 space-y-1">
-                  <p>Assinatura recorrente: <span className="font-medium text-gray-700">Ativa</span></p>
+                  <p>Forma de pagamento: <span className="font-medium text-gray-700">{METODO_LABELS[conta.formaPagamento as MetodoPagamento] || conta.formaPagamento}</span></p>
                   {conta.ultimoPagamento && (
                     <p>Último pagamento: {new Date(conta.ultimoPagamento).toLocaleDateString('pt-BR')}</p>
                   )}
-                </div>
-              )}
-
-              {/* Carência */}
-              {conta.statusEfetivo === 'ativo_carencia' && conta.dataFimAcesso && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-yellow-600 shrink-0" />
-                    <p className="text-xs font-semibold text-yellow-800">Período de Carência</p>
-                  </div>
-                  <p className="text-xs text-yellow-700">
-                    Sua assinatura foi cancelada. Você ainda tem acesso até <strong>{new Date(conta.dataFimAcesso).toLocaleDateString('pt-BR')}</strong>.
-                  </p>
-                  <Button
-                    size="sm"
-                    className="bg-yellow-600 hover:bg-yellow-700 text-white h-8 text-xs"
-                    onClick={async () => {
-                      if (!confirm('Deseja reativar sua assinatura recorrente?')) return
-                      try {
-                        await api('/api/asaas/cancelar', { method: 'POST' })
-                        // Reativa: limpa flag de cancelamento e força nova assinatura
-                        await api('/api/mercado/reativar-assinatura', { method: 'POST' })
-                        toast.success('Assinatura reativada! Faça login novamente.')
-                        window.location.reload()
-                      } catch (err) {
-                        toast.error(err instanceof Error ? err.message : 'Erro ao reativar')
-                      }
-                    }}
-                  >
-                    Reativar Assinatura
-                  </Button>
-                </div>
-              )}
-
-              {/* Botão cancelar assinatura */}
-              {conta.status === 'ativo' && !conta.asaasAssinaturaCancelada && conta.asaasSubscriptionId && (
-                <div className="pt-1 border-t border-gray-100">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-red-200 text-red-600 hover:bg-red-50 text-xs h-9"
-                    onClick={async () => {
-                      if (!confirm('Tem certeza que deseja cancelar sua assinatura? Você ainda terá acesso por 30 dias após o último pagamento.')) return
-                      try {
-                        await api('/api/asaas/cancelar', { method: 'POST' })
-                        toast.success('Assinatura cancelada. Acesso mantido por 30 dias.')
-                        window.location.reload()
-                      } catch (err) {
-                        toast.error(err instanceof Error ? err.message : 'Erro ao cancelar')
-                      }
-                    }}
-                  >
-                    Cancelar Assinatura
-                  </Button>
-                  <p className="text-[10px] text-gray-400 mt-1.5">
-                    Ao cancelar, você mantém acesso por 30 dias após o último pagamento.
-                  </p>
+                  {conta.dataProximoPagamento && (
+                    <p>Próximo vencimento: {new Date(conta.dataProximoPagamento).toLocaleDateString('pt-BR')}</p>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -2230,29 +2184,173 @@ export default function MarketPanel({ onLogout, onLogin }: MarketPanelProps) {
   return <Dashboard conta={conta} onLogout={onLogout} />
 }
 
-// ── Tela de Bloqueio / Pagamento Asaas ──────────────────────────────────────
+// ── Tipo de método de pagamento ────────────────────────────────────────────
 
-function PaymentBlockScreen({ conta }: { conta: ContaData }) {
+type MetodoPagamento = 'pix' | 'cartao_mensal' | 'cartao_recorrente' | 'boleto'
+
+const METODO_LABELS: Record<MetodoPagamento, string> = {
+  pix: 'Pix',
+  cartao_mensal: 'Cartão de Crédito (Mensal)',
+  cartao_recorrente: 'Cartão de Crédito (Recorrente)',
+  boleto: 'Boleto Bancário',
+}
+
+// ── Seletor de método de pagamento (reutilizável) ──────────────────────────
+
+function MetodoPagamentoSelector({
+  formaPagamentoAtual,
+  onSuccess,
+  compact = false,
+}: {
+  formaPagamentoAtual?: string | null
+  onSuccess?: () => void
+  compact?: boolean
+}) {
   const [loading, setLoading] = useState(false)
-  const [paymentData, setPaymentData] = useState<any>(null)
-  const [error, setError] = useState('')
+  const [sucesso, setSucesso] = useState(false)
+  const [cartaoExpandido, setCartaoExpandido] = useState(false)
 
-  const handlePay = async (tipo: 'PIX' | 'BOLETO') => {
+  const handleSelect = async (metodo: MetodoPagamento) => {
     setLoading(true)
-    setError('')
     try {
-      const res = await api('/api/asaas/checkout', {
+      await api('/api/pagamento/metodo', {
         method: 'POST',
-        body: JSON.stringify({ billingType: tipo }),
+        body: JSON.stringify({ metodo }),
       })
-      setPaymentData(res)
-    } catch (err: any) {
-      setError(err?.message || 'Erro ao gerar pagamento')
+      setSucesso(true)
+      toast.success('Solicitação enviada com sucesso!')
+      onSuccess?.()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao enviar solicitação')
     } finally {
       setLoading(false)
     }
   }
 
+  const btnBase = 'flex items-center gap-3 p-4 rounded-xl transition-all font-medium disabled:opacity-50'
+  const cartaoBtnBase = 'flex items-center justify-between gap-3 p-4 rounded-xl transition-all font-medium disabled:opacity-50'
+
+  return (
+    <div className={cn('space-y-3', compact && 'space-y-2')}>
+      {sucesso ? (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center space-y-2">
+          <CheckCircle className="h-8 w-8 text-green-600 mx-auto" />
+          <p className="text-sm font-semibold text-green-800">Solicitação enviada!</p>
+          <p className="text-xs text-green-700">
+            O administrador enviará o contrato e link de pagamento por e-mail.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Se já tem método selecionado, mostra */}
+          {formaPagamentoAtual && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-3">
+              <CreditCard className="h-5 w-5 text-blue-600 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] text-blue-500 uppercase tracking-wide">Forma de pagamento atual</p>
+                <p className="text-sm font-semibold text-blue-800">
+                  {METODO_LABELS[formaPagamentoAtual as MetodoPagamento] || formaPagamentoAtual}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Botão Pix */}
+          <button
+            onClick={() => handleSelect('pix')}
+            disabled={loading}
+            className={cn(btnBase, 'bg-emerald-600 hover:bg-emerald-700 text-white')}
+          >
+            <QrCode className="h-6 w-6 shrink-0" />
+            <div className="text-left">
+              <span className={compact ? 'text-xs' : 'text-sm'}>Pix</span>
+              <p className={cn('text-white/70', compact ? 'text-[10px]' : 'text-xs')}>
+                Pagamento instantâneo via QR Code
+              </p>
+            </div>
+          </button>
+
+          {/* Botão Cartão de Crédito (com sub-opções) */}
+          <div>
+            <button
+              onClick={() => !loading && setCartaoExpandido(!cartaoExpandido)}
+              disabled={loading}
+              className={cn(cartaoBtnBase, 'bg-indigo-600 hover:bg-indigo-700 text-white w-full')}
+            >
+              <div className="flex items-center gap-3">
+                <CreditCard className="h-6 w-6 shrink-0" />
+                <div className="text-left">
+                  <span className={compact ? 'text-xs' : 'text-sm'}>Cartão de Crédito</span>
+                  <p className={cn('text-white/70', compact ? 'text-[10px]' : 'text-xs')}>
+                    Escolha a modalidade
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className={cn('h-4 w-4 shrink-0 transition-transform', cartaoExpandido && 'rotate-90')} />
+            </button>
+            <AnimatePresence>
+              {cartaoExpandido && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="grid grid-cols-2 gap-2 mt-2 pl-2">
+                    <button
+                      onClick={() => handleSelect('cartao_mensal')}
+                      disabled={loading}
+                      className="flex flex-col items-center gap-1.5 p-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg transition-colors text-xs font-medium"
+                    >
+                      <Calendar className="h-4 w-4" />
+                      Mensal
+                      <span className="text-[10px] text-indigo-500 font-normal">Escolhe todo mês</span>
+                    </button>
+                    <button
+                      onClick={() => handleSelect('cartao_recorrente')}
+                      disabled={loading}
+                      className="flex flex-col items-center gap-1.5 p-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg transition-colors text-xs font-medium"
+                    >
+                      <TrendingUp className="h-4 w-4" />
+                      Recorrente
+                      <span className="text-[10px] text-indigo-500 font-normal">Cobrança automática</span>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Botão Boleto */}
+          <button
+            onClick={() => handleSelect('boleto')}
+            disabled={loading}
+            className={cn(btnBase, 'bg-amber-600 hover:bg-amber-700 text-white')}
+          >
+            <Banknote className="h-6 w-6 shrink-0" />
+            <div className="text-left">
+              <span className={compact ? 'text-xs' : 'text-sm'}>Boleto Bancário</span>
+              <p className={cn('text-white/70', compact ? 'text-[10px]' : 'text-xs')}>
+                Pagamento por boleto
+              </p>
+            </div>
+          </button>
+
+          {loading && (
+            <div className="flex items-center justify-center gap-2 py-1">
+              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+              <span className="text-xs text-gray-400">Enviando...</span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── Tela de Bloqueio / Seleção de Pagamento ────────────────────────────────
+
+function PaymentBlockScreen({ conta }: { conta: ContaData }) {
   const segmentoLabel = conta.segmento === 'farmacias' ? 'Farmácia' : conta.segmento === 'petshops' ? 'PetShop' : 'Empresa'
   const isAguardando = conta.status === 'ativo_aguardando_pagamento' || conta.statusEfetivo === 'ativo_aguardando_pagamento'
   const isCancelado = conta.statusEfetivo === 'assinatura_cancelada'
@@ -2278,10 +2376,10 @@ function PaymentBlockScreen({ conta }: { conta: ContaData }) {
           <div className="text-center">
             <p className="text-gray-600 text-sm">
               {isCancelado
-                ? 'Sua assinatura foi cancelada e o período de carência acabou. Para voltar a utilizar o Panfletos Brasil, assine novamente.'
+                ? 'Sua assinatura foi cancelada. Para voltar a utilizar o Panfletos Brasil, escolha sua forma de pagamento abaixo.'
                 : isAguardando
-                  ? 'Sua empresa foi ativada pelo administrador! Para começar a utilizar o Panfletos Brasil e publicar seus panfletos, efetue o pagamento da mensalidade abaixo.'
-                  : 'Seu período de teste de 60 dias terminou. Para continuar utilizando o Panfletos Brasil e publicando seus panfletos, regularize sua assinatura.'}
+                  ? 'Sua empresa foi ativada pelo administrador! Para começar a utilizar o Panfletos Brasil, escolha sua forma de pagamento.'
+                  : 'Seu período de teste de 60 dias terminou. Para continuar utilizando o Panfletos Brasil, escolha sua forma de pagamento.'}
             </p>
           </div>
 
@@ -2294,87 +2392,56 @@ function PaymentBlockScreen({ conta }: { conta: ContaData }) {
             <p className="text-xs text-gray-400 mt-1">/mês</p>
           </div>
 
-          {/* Payment result */}
-          {paymentData && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-3">
-              <p className="text-green-700 text-sm font-medium text-center">
-                Pagamento gerado com sucesso!
-              </p>
-              {paymentData.billingType === 'PIX' && paymentData.pixQrCode && (
-                <div className="text-center space-y-2">
-                  <p className="text-xs text-gray-500">Escaneie o QR Code PIX:</p>
-                  <img
-                    src={`data:image/png;base64,${paymentData.pixEncodedImage}`}
-                    alt="QR Code PIX"
-                    className="w-48 h-48 mx-auto rounded-lg"
-                  />
-                  <p className="text-[10px] text-gray-400 break-all">{paymentData.pixQrCode}</p>
-                </div>
-              )}
-              {paymentData.billingType === 'BOLETO' && paymentData.bankSlipUrl && (
-                <div className="text-center">
-                  <a
-                    href={paymentData.bankSlipUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                  >
-                    <FileText className="h-4 w-4" />
-                    Abrir Boleto Bancário
-                  </a>
-                </div>
-              )}
-              <a
-                href={paymentData.invoiceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block text-center text-sm text-blue-600 hover:underline"
-              >
-                Ver fatura completa no Asaas
-              </a>
-            </div>
-          )}
-
-          {error && (
-            <p className="text-red-600 text-sm text-center bg-red-50 p-2 rounded-lg">{error}</p>
-          )}
-
-          {/* Botões de pagamento */}
-          {!paymentData && (
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => handlePay('PIX')}
-                disabled={loading}
-                className="flex flex-col items-center gap-2 p-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl transition-colors font-medium"
-              >
-                <QrCode className="h-6 w-6" />
-                <span className="text-sm">Pagar via PIX</span>
-              </button>
-              <button
-                onClick={() => handlePay('BOLETO')}
-                disabled={loading}
-                className="flex flex-col items-center gap-2 p-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors font-medium"
-              >
-                <FileText className="h-6 w-6" />
-                <span className="text-sm">Pagar via Boleto</span>
-              </button>
-            </div>
-          )}
-
-          {paymentData && (
-            <button
-              onClick={() => setPaymentData(null)}
-              className="w-full text-center text-sm text-gray-500 hover:text-gray-700 py-2"
-            >
-              Gerar outro pagamento
-            </button>
-          )}
+          {/* Payment method selector */}
+          <MetodoPagamentoSelector formaPagamentoAtual={conta.formaPagamento} />
 
           <p className="text-[10px] text-gray-400 text-center">
-            Após a confirmação do pagamento, seu acesso será liberado automaticamente.
+            Após escolher, o administrador enviará o contrato e link de pagamento por e-mail.
           </p>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Banner de aviso de renovação (5 dias antes do vencimento) ───────────────
+
+function RenewalWarningBanner({ conta }: { conta: ContaData }) {
+  const [dismissed, setDismissed] = useState(false)
+
+  const diasRestantes = conta.dataProximoPagamento
+    ? Math.max(0, Math.ceil((new Date(conta.dataProximoPagamento).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null
+
+  // Só mostra se faltam 5 dias ou menos
+  if (dismissed || !diasRestantes || diasRestantes > 5) return null
+
+  return (
+    <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800">
+              Sua assinatura vence em {diasRestantes} {diasRestantes === 1 ? 'dia' : 'dias'}.
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Escolha a forma de pagamento para o próximo mês.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => setDismissed(true)}
+          className="text-amber-400 hover:text-amber-600 shrink-0"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <MetodoPagamentoSelector
+        formaPagamentoAtual={conta.formaPagamento}
+        compact
+        onSuccess={() => setDismissed(true)}
+      />
     </div>
   )
 }
