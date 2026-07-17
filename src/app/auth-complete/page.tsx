@@ -12,8 +12,10 @@ import { useEffect, useState } from 'react'
  * 2. Android abre o Chrome para o fluxo OAuth
  * 3. Apos autenticacao, Chrome volta ao app via custom scheme (panfletosbrasil://)
  * 4. Android carrega esta pagina no WebView com o idToken
- * 5. Esta pagina chama /api/auth/google-login → cookie e setado no WebView
- * 6. Redireciona para a home
+ * 5. Esta pagina tenta /api/auth/google-login (Firebase token)
+ *    e se falhar, tenta /api/auth/google-login-webview (Google token direto)
+ * 6. Cookie eb_session e setado pelo servidor no WebView
+ * 7. Redireciona para a home
  */
 export default function AuthCompletePage() {
   const [erro, setErro] = useState<string | null>(null)
@@ -29,18 +31,31 @@ export default function AuthCompletePage() {
       return
     }
 
-    fetch('/api/auth/google-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idToken: token }),
-    })
-      .then((res) => res.json())
+    // Tenta primeiro com o endpoint Firebase, depois com o endpoint Google direto
+    const tryLogin = async (endpoint: string) => {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: token }),
+      })
+      return res.json()
+    }
+
+    tryLogin('/api/auth/google-login')
       .then((data) => {
         if (data.ok) {
-          // Cookie eb_session foi setado pelo servidor no WebView
           window.location.href = '/'
         } else {
-          setErro(data.erro || 'Erro ao fazer login com Google.')
+          // Fallback: tenta com o endpoint que aceita Google tokens diretos
+          return tryLogin('/api/auth/google-login-webview')
+        }
+        return null
+      })
+      .then((data) => {
+        if (data && data.ok) {
+          window.location.href = '/'
+        } else if (data && data.erro) {
+          setErro(data.erro)
         }
       })
       .catch((err) => {
