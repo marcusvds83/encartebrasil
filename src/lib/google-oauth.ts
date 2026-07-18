@@ -4,10 +4,82 @@
  * O signInWithRedirect do Firebase falha no WebView porque o estado
  * é guardado em sessionStorage e se perde quando o Chrome abre.
  * Este módulo implementa um fluxo OAuth independente do Firebase.
+ *
+ * PKCE state é armazenado em memória no servidor (não em cookies)
+ * para evitar o problema de cookies do WebView não estarem
+ * disponíveis no Chrome quando o fluxo volta do Google.
  */
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
+
+// ── Server-side PKCE state storage (in-memory) ─────────────────────
+// Armazena { verifier, clientId, createdAt } por state.
+// O Chrome não tem acesso aos cookies do WebView, por isso
+// usamos storage do servidor ao invés de cookies HttpOnly.
+
+interface PkceStateEntry {
+  verifier: string
+  clientId: string
+  createdAt: number
+}
+
+const PKCE_TTL_MS = 10 * 60 * 1000 // 10 minutos
+
+/** Mapa em memória: state → PkceStateEntry */
+const pkceStore = new Map<string, PkceStateEntry>()
+
+/** Limpa entradas expiradas (chamar periodicamente) */
+function cleanupExpiredEntries() {
+  const now = Date.now()
+  for (const [key, entry] of pkceStore) {
+    if (now - entry.createdAt > PKCE_TTL_MS) {
+      pkceStore.delete(key)
+    }
+  }
+}
+
+/**
+ * Armazena o PKCE state no servidor.
+ * Retorna o state gerado.
+ */
+export function storePkceState(verifier: string, clientId: string): string {
+  // Limpa entradas expiradas a cada chamada (lazy cleanup)
+  if (pkceStore.size > 100) cleanupExpiredEntries()
+
+  const state = randomString(32)
+  pkceStore.set(state, {
+    verifier,
+    clientId,
+    createdAt: Date.now(),
+  })
+  console.log(`[pkce-store] state salvo: ${state.substring(0, 8)}... (total: ${pkceStore.size})`)
+  return state
+}
+
+/**
+ * Recupera e remove o PKCE state do servidor.
+ * Retorna null se não encontrado ou expirado.
+ */
+export function consumePkceState(state: string): { verifier: string; clientId: string } | null {
+  const entry = pkceStore.get(state)
+  if (!entry) {
+    console.warn(`[pkce-store] state NÃO encontrado: ${state.substring(0, 8)}...`)
+    return null
+  }
+
+  // Verifica expiração
+  if (Date.now() - entry.createdAt > PKCE_TTL_MS) {
+    pkceStore.delete(state)
+    console.warn(`[pkce-store] state expirado: ${state.substring(0, 8)}...`)
+    return null
+  }
+
+  // Remove após consumo (one-time use)
+  pkceStore.delete(state)
+  console.log(`[pkce-store] state consumido: ${state.substring(0, 8)}...`)
+  return { verifier: entry.verifier, clientId: entry.clientId }
+}
 
 /** Gera uma string aleatória para state/nonce */
 function randomString(length = 32): string {
