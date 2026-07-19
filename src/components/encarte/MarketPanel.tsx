@@ -1911,6 +1911,90 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
               )}
             </CardContent>
           </Card>
+
+          {/* ── Seção de Pagamento (visível após piloto vencido OU empresa ativa) ── */}
+          {(isPilotoExpirado || isAtivo || conta.dentroJanelaAviso || conta.dentroCarencia72h) && (
+            <Card className="border-orange-200">
+              <CardHeader className="pb-3 pt-4 px-4">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-orange-600" />
+                  Pagamento da Assinatura
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-3">
+                {/* Aviso contextual */}
+                {conta.dentroCarencia72h && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    <p className="text-xs text-orange-800 font-medium">
+                      ⏰ Aguardando confirmação de pagamento — {conta.horasRestantesCarencia ?? 72}h restantes
+                    </p>
+                    <p className="text-[11px] text-orange-600 mt-1">
+                      Você escolheu: <strong>{conta.formaPagamento ? METODO_LABELS[conta.formaPagamento as MetodoPagamento] : '—'}</strong>. Aguarde a confirmação.
+                    </p>
+                  </div>
+                )}
+
+                {conta.dentroJanelaAviso && !conta.dentroCarencia72h && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    <p className="text-xs text-orange-800 font-medium">
+                      ⚠️ Faltam {conta.diasParaVencer ?? 0} dia(s) para o vencimento
+                    </p>
+                    <p className="text-[11px] text-orange-600 mt-1">
+                      Escolha sua forma de pagamento para evitar interrupção.
+                    </p>
+                  </div>
+                )}
+
+                {isPilotoExpirado && !conta.dentroCarencia72h && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-xs text-red-800 font-medium">
+                      🔒 Período encerrado — escolha o pagamento para reativar
+                    </p>
+                  </div>
+                )}
+
+                {/* Mensalidade */}
+                <div className="bg-gray-50 rounded-lg p-3 text-center">
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wide">Mensalidade</p>
+                  <p className="text-2xl font-bold text-gray-800 mt-1">
+                    R$ {conta.mensalidade || 399},00
+                  </p>
+                  <p className="text-[10px] text-gray-400">/mês</p>
+                </div>
+
+                {/* Seletor de método de pagamento (envia webhook CRM Odoo) */}
+                <MetodoPagamentoSelector
+                  formaPagamentoAtual={conta.formaPagamento}
+                  onSuccess={() => {
+                    // Recarrega dados da conta para atualizar status
+                    if (typeof window !== 'undefined') {
+                      setTimeout(() => window.location.reload(), 1500)
+                    }
+                  }}
+                />
+
+                {/* Info sobre carência 72h */}
+                {!conta.formaPagamento && (
+                  <p className="text-[11px] text-gray-500 text-center">
+                    Após escolher, você terá <strong>3 dias (72h)</strong> para confirmar o pagamento.
+                  </p>
+                )}
+
+                {/* E-mail de suporte */}
+                <div className="border-t border-gray-100 pt-3">
+                  <p className="text-[11px] text-gray-600 text-center">
+                    Dúvidas? Contate:<br />
+                    <a
+                      href={`mailto:${conta.emailSuporte || 'notifications@panfletosbrasil.odoo.com'}`}
+                      className="text-red-600 font-semibold hover:underline"
+                    >
+                      {conta.emailSuporte || 'notifications@panfletosbrasil.odoo.com'}
+                    </a>
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* ── Tab: Perfil ── */}
