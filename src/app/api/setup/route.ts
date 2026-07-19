@@ -170,6 +170,48 @@ export async function GET(req: NextRequest) {
       resultados.push(`Encartes ja existem (${encartesExistentes.length})`)
     }
 
+    // 6. Cria "Mercadinho da Lu" — empresa no 2º mês (ativo, próximo pgto em 2 dias) para testar aviso D-3
+    const mercadinhoLuExistente = await db.mercado.findUnique({ where: { cnpj: '33333333000133' } })
+    if (!mercadinhoLuExistente) {
+      const agoraMs = Date.now()
+      const ultimoPagamento = new Date(agoraMs - 28 * 24 * 60 * 60 * 1000) // 28 dias atrás
+      const dataProximoPagamento = new Date(agoraMs + 2 * 24 * 60 * 60 * 1000) // 2 dias à frente
+      const pilotoFim = new Date(agoraMs - 3 * 24 * 60 * 60 * 1000) // piloto já venceu há 3 dias
+
+      await db.mercado.create({
+        nome: 'Mercadinho da Lu',
+        cnpj: '33333333000133',
+        cidade: 'Belo Horizonte',
+        estado: 'MG',
+        endereco: 'Rua das Flores, 456',
+        telefone: '(31) 98888-1234',
+        emailLogin: 'lu@mercadinho.com',
+        senhaHash: hashSenha('lu123456'),
+        mensalidade: 399,
+        status: 'ativo',
+        pilotoInicio: new Date(agoraMs - 33 * 24 * 60 * 60 * 1000).toISOString(), // 33 dias atrás
+        pilotoFim: pilotoFim.toISOString(),
+        criadoEm: new Date(agoraMs - 33 * 24 * 60 * 60 * 1000).toISOString(),
+        destaque: false,
+        destaqueInicio: null,
+        destaqueFim: null,
+        latitude: null,
+        longitude: null,
+        logoPath: null,
+        responsavel: 'Luiza Silva',
+        cpf: '98765432100',
+        segmento: 'mercados',
+        formaPagamento: 'pix',
+        ultimoPagamento: ultimoPagamento.toISOString(),
+        ultimoPagamentoValor: 399,
+        dataProximoPagamento: dataProximoPagamento.toISOString(),
+        dataEscolhaPagamento: new Date(agoraMs - 28 * 24 * 60 * 60 * 1000).toISOString(),
+      } as any)
+      resultados.push('Mercadinho da Lu criado: CNPJ 33.333.333/0001-33 / lu@mercadinho.com / lu123456 (ativo, 2º mês, próximo pgto em 2 dias)')
+    } else {
+      resultados.push('Mercadinho da Lu ja existe')
+    }
+
     return NextResponse.json({
       ok: true,
       mensagem: 'Setup concluido com sucesso!',
@@ -180,6 +222,12 @@ export async function GET(req: NextRequest) {
           cnpj: '11.222.333/0001-81',
           email: 'super@central.com',
           senha: 'super123',
+        },
+        mercadinhoLu: {
+          cnpj: '33.333.333/0001-33',
+          email: 'lu@mercadinho.com',
+          senha: 'lu123456',
+          obs: '2º mês, próximo pagamento em 2 dias (teste do aviso D-3)',
         },
       },
     })
