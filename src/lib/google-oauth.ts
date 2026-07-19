@@ -1,92 +1,65 @@
 /**
  * Google OAuth helper — fluxo server-side para WebView (Android APK).
  *
- * O signInWithRedirect do Firebase falha no WebView porque o estado
- * é guardado em sessionStorage e se perde quando o Chrome abre.
- * Este módulo implementa um fluxo OAuth independente do Firebase.
+ * IMPORTANTE: O Render free roda em container efêmero. Não podemos
+ * armazenar o PKCE state em memória porque a instância pode reiniciar
+ * entre o /google-oauth-start e o /google-oauth-callback.
  *
- * PKCE state é armazenado em memória no servidor (não em cookies)
- * para evitar o problema de cookies do WebView não estarem
- * disponíveis no Chrome quando o fluxo volta do Google.
+ * Solução: codificar verifier + clientId no próprio state (JWT-like).
+ * O state é assinado com um secret para evitar tampering.
  */
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 
-// ── Server-side PKCE state storage (in-memory) ─────────────────────
-// Armazena { verifier, clientId, createdAt } por state.
-// O Chrome não tem acesso aos cookies do WebView, por isso
-// usamos storage do servidor ao invés de cookies HttpOnly.
-
-interface PkceStateEntry {
-  verifier: string
-  clientId: string
-  createdAt: number
-}
-
-const PKCE_TTL_MS = 10 * 60 * 1000 // 10 minutos
-
-/** Mapa em memória: state → PkceStateEntry */
-const pkceStore = new Map<string, PkceStateEntry>()
-
-/** Limpa entradas expiradas (chamar periodicamente) */
-function cleanupExpiredEntries() {
-  const now = Date.now()
-  for (const [key, entry] of pkceStore) {
-    if (now - entry.createdAt > PKCE_TTL_MS) {
-      pkceStore.delete(key)
-    }
-  }
-}
+// Secret para assinar o state (usa NEXT_PUBLIC_BASE_URL como fallback)
+const STATE_SECRET = process.env.OAUTH_STATE_SECRET || 'panfletosbrasil-oauth-secret-2026'
 
 /**
- * Armazena o PKCE state no servidor.
- * Retorna o state gerado.
+ * Codifica { verifier, clientId } em um state string (base64url + HMAC).
+ * Formato: base64url(verifier).base64url(clientId).base64url(hmac)
  */
 export function storePkceState(verifier: string, clientId: string): string {
-  // Limpa entradas expiradas a cada chamada (lazy cleanup)
-  if (pkceStore.size > 100) cleanupExpiredEntries()
-
-  const state = randomString(32)
-  pkceStore.set(state, {
-    verifier,
-    clientId,
-    createdAt: Date.now(),
-  })
-  console.log(`[pkce-store] state salvo: ${state.substring(0, 8)}... (total: ${pkceStore.size})`)
+  const payload = `${base64UrlEncodeStr(verifier)}.${base64UrlEncodeStr(clientId)}`
+  const hmac = simpleHmac(payload)
+  const state = `${payload}.${hmac}`
+  console.log(`[pkce-state] state gerado (stateless): ${state.substring(0, 20)}...`)
   return state
 }
 
 /**
- * Recupera e remove o PKCE state do servidor.
- * Retorna null se não encontrado ou expirado.
+ * Decodifica o state e valida o HMAC.
+ * Retorna { verifier, clientId } ou null se inválido.
  */
 export function consumePkceState(state: string): { verifier: string; clientId: string } | null {
-  const entry = pkceStore.get(state)
-  if (!entry) {
-    console.warn(`[pkce-store] state NÃO encontrado: ${state.substring(0, 8)}...`)
+  try {
+    const parts = state.split('.')
+    if (parts.length !== 3) {
+      console.warn(`[pkce-state] state inválido (partes: ${parts.length})`)
+      return null
+    }
+    const [verifierB64, clientIdB64, hmac] = parts
+    const payload = `${verifierB64}.${clientIdB64}`
+    const expectedHmac = simpleHmac(payload)
+    if (hmac !== expectedHmac) {
+      console.warn(`[pkce-state] HMAC inválido (esperado: ${expectedHmac.substring(0, 8)}..., recebido: ${hmac.substring(0, 8)}...)`)
+      return null
+    }
+    const verifier = base64UrlDecodeStr(verifierB64)
+    const clientId = base64UrlDecodeStr(clientIdB64)
+    console.log(`[pkce-state] state válido: clientId=${clientId.substring(0, 10)}... verifier=${verifier.substring(0, 8)}...`)
+    return { verifier, clientId }
+  } catch (e) {
+    console.warn(`[pkce-state] erro ao decodificar state:`, e)
     return null
   }
-
-  // Verifica expiração
-  if (Date.now() - entry.createdAt > PKCE_TTL_MS) {
-    pkceStore.delete(state)
-    console.warn(`[pkce-store] state expirado: ${state.substring(0, 8)}...`)
-    return null
-  }
-
-  // Remove após consumo (one-time use)
-  pkceStore.delete(state)
-  console.log(`[pkce-store] state consumido: ${state.substring(0, 8)}...`)
-  return { verifier: entry.verifier, clientId: entry.clientId }
 }
 
-/** Gera uma string aleatória para state/nonce */
+/** Gera uma string aleatória para verifier */
 function randomString(length = 32): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'
   let result = ''
   const randomValues = new Uint8Array(length)
-  // eslint-disable-next-line no-restricted-globals
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     crypto.getRandomValues(randomValues)
   } else {
@@ -109,7 +82,7 @@ export async function generateCodeChallenge(verifier: string): Promise<string> {
   return base64UrlEncode(hash)
 }
 
-/** Base64url encode */
+/** Base64url encode (ArrayBuffer) */
 function base64UrlEncode(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer)
   let binary = ''
@@ -117,9 +90,26 @@ function base64UrlEncode(buffer: ArrayBuffer): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+/** Base64url encode (string) */
+function base64UrlEncodeStr(str: string): string {
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/** Base64url decode (string) */
+function base64UrlDecodeStr(str: string): string {
+  const base64 = str.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = base64 + '='.repeat((4 - base64.length % 4) % 4)
+  return atob(padded)
+}
+
+/** HMAC simples (não criptograficamente forte, mas suficiente para state) */
+function simpleHmac(payload: string): string {
+  const { createHmac } = require('crypto')
+  return createHmac('sha256', STATE_SECRET).update(payload).digest('base64url')
+}
+
 /**
- * Tenta obter o Google OAuth Client ID do projeto Firebase.
- * Tenta múltiplos métodos.
+ * Tenta obter o Google OAuth Client ID.
  */
 export async function getGoogleClientId(): Promise<string | null> {
   // Método 1: Variável de ambiente direta
@@ -138,26 +128,12 @@ export async function getGoogleClientId(): Promise<string | null> {
       )
       if (res.ok) {
         const config = await res.json()
-        // A config pode ter o client ID em signInProviders
         const providers = config.signInProviders || {}
         const google = providers.google || {}
         if (google.clientId) return google.clientId
       }
     } catch (e) {
       console.error('[google-oauth] erro ao buscar config do Firebase:', e)
-    }
-
-    // Método 3: Tentar descobrir via endpoint público do Firebase
-    try {
-      const res = await fetch(
-        `https://identitytoolkit.googleapis.com/v2/projects/${projectId}/oauthIdpConfigs/google?key=${apiKey}`
-      )
-      if (res.ok) {
-        const data = await res.json()
-        if (data.clientId) return data.clientId
-      }
-    } catch {
-      // ignore
     }
   }
 
@@ -193,18 +169,13 @@ export async function buildGoogleAuthUrl(
   return `${GOOGLE_AUTH_URL}?${params.toString()}`
 }
 
-/**
- * Troca um authorization code por tokens usando PKCE (sem client secret).
- * Chamado do lado do cliente (Chrome).
- */
+/** Troca o code por tokens via PKCE */
 export async function exchangeCodeForTokens(
   code: string,
-  codeVerifier: string,
-  redirectUri: string
-): Promise<{ id_token: string; access_token: string }> {
-  const clientId = await getGoogleClientId()
-  if (!clientId) throw new Error('Google Client ID não disponível')
-
+  redirectUri: string,
+  clientId: string,
+  codeVerifier: string
+): Promise<any> {
   const res = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -218,8 +189,9 @@ export async function exchangeCodeForTokens(
   })
 
   if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Erro ao trocar código: ${err}`)
+    const errText = await res.text()
+    console.error(`[google-oauth] erro ao trocar code: ${errText}`)
+    throw new Error(`Google token exchange failed: ${errText}`)
   }
 
   return res.json()
