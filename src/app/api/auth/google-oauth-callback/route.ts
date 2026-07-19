@@ -53,19 +53,28 @@ export async function GET(req: NextRequest) {
     // 2. Determinar redirect_uri (deve ser o mesmo usado no google-oauth-start)
     const redirectUri = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://encartebrasil.onrender.com'}/api/auth/google-oauth-callback`
 
-    // 3. Trocar code por tokens via PKCE
+    // 3. Trocar code por tokens via PKCE (com client_secret se disponível)
     console.log(`[google-oauth-callback] trocando code por tokens... clientId=${clientId.substring(0, 10)}...`)
+
+    const tokenParams: Record<string, string> = {
+      grant_type: 'authorization_code',
+      code,
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      code_verifier: verifier,
+    }
+
+    // Adiciona client_secret se configurado (necessário para Web Application clients)
+    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
+    if (clientSecret) {
+      tokenParams.client_secret = clientSecret
+      console.log('[google-oauth-callback] usando client_secret')
+    }
 
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        code_verifier: verifier,
-      }).toString(),
+      body: new URLSearchParams(tokenParams).toString(),
     })
 
     if (!tokenRes.ok) {

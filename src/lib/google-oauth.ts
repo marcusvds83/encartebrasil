@@ -169,23 +169,34 @@ export async function buildGoogleAuthUrl(
   return `${GOOGLE_AUTH_URL}?${params.toString()}`
 }
 
-/** Troca o code por tokens via PKCE */
+/** Troca o code por tokens via PKCE (com client_secret se disponível) */
 export async function exchangeCodeForTokens(
   code: string,
   redirectUri: string,
   clientId: string,
   codeVerifier: string
 ): Promise<any> {
+  const params: Record<string, string> = {
+    grant_type: 'authorization_code',
+    code,
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    code_verifier: codeVerifier,
+  }
+
+  // Para "Web Application" clients, o Google exige client_secret
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
+  if (clientSecret) {
+    params.client_secret = clientSecret
+    console.log('[google-oauth] usando client_secret (Web Application)')
+  } else {
+    console.log('[google-oauth] sem client_secret (PKCE puro — Desktop app)')
+  }
+
   const res = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      code_verifier: codeVerifier,
-    }).toString(),
+    body: new URLSearchParams(params).toString(),
   })
 
   if (!res.ok) {
