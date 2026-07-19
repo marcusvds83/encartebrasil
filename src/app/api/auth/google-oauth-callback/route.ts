@@ -48,13 +48,13 @@ export async function GET(req: NextRequest) {
       return redirectToAppWithError('Sessão OAuth expirada. Tente novamente.')
     }
 
-    const { verifier, clientId } = pkceData
+    const { verifier, clientId, clientSecret } = pkceData
 
     // 2. Determinar redirect_uri (deve ser o mesmo usado no google-oauth-start)
     const redirectUri = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://encartebrasil.onrender.com'}/api/auth/google-oauth-callback`
 
     // 3. Trocar code por tokens via PKCE (com client_secret se disponível)
-    console.log(`[google-oauth-callback] trocando code por tokens... clientId=${clientId.substring(0, 10)}...`)
+    console.log(`[google-oauth-callback] trocando code por tokens... clientId=${clientId.substring(0, 10)}... hasSecret=${!!clientSecret}`)
 
     const tokenParams: Record<string, string> = {
       grant_type: 'authorization_code',
@@ -64,11 +64,13 @@ export async function GET(req: NextRequest) {
       code_verifier: verifier,
     }
 
-    // Adiciona client_secret se configurado (necessário para Web Application clients)
-    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
-    if (clientSecret) {
-      tokenParams.client_secret = clientSecret
+    // Adiciona client_secret (do state ou env var)
+    const secretToUse = clientSecret || process.env.GOOGLE_OAUTH_CLIENT_SECRET
+    if (secretToUse) {
+      tokenParams.client_secret = secretToUse
       console.log('[google-oauth-callback] usando client_secret')
+    } else {
+      console.warn('[google-oauth-callback] SEM client_secret — Google vai rejeitar!')
     }
 
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -80,7 +82,7 @@ export async function GET(req: NextRequest) {
     if (!tokenRes.ok) {
       const errText = await tokenRes.text()
       console.error(`[google-oauth-callback] erro do Google ao trocar code: ${errText}`)
-      return redirectToAppWithError('Erro ao trocar código de autenticação.')
+      return redirectToAppWithError('Erro ao trocar código de autenticação: ' + errText)
     }
 
     const tokenData = await tokenRes.json()

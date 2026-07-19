@@ -16,43 +16,81 @@ const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 const STATE_SECRET = process.env.OAUTH_STATE_SECRET || 'panfletosbrasil-oauth-secret-2026'
 
 /**
- * Codifica { verifier, clientId } em um state string (base64url + HMAC).
- * Formato: base64url(verifier).base64url(clientId).base64url(hmac)
+ * Codifica { verifier, clientId, clientSecret } em um state string (base64url + HMAC).
+ * Formato: base64url(verifier).base64url(clientId).base64url(clientSecret).base64url(hmac)
  */
-export function storePkceState(verifier: string, clientId: string): string {
-  const payload = `${base64UrlEncodeStr(verifier)}.${base64UrlEncodeStr(clientId)}`
+export function storePkceState(verifier: string, clientId: string, clientSecret?: string | null): string {
+  const payload = `${base64UrlEncodeStr(verifier)}.${base64UrlEncodeStr(clientId)}.${base64UrlEncodeStr(clientSecret || '')}`
   const hmac = simpleHmac(payload)
   const state = `${payload}.${hmac}`
-  console.log(`[pkce-state] state gerado (stateless): ${state.substring(0, 20)}...`)
+  console.log(`[pkce-state] state gerado (stateless): ${state.substring(0, 20)}... hasSecret=${!!clientSecret}`)
   return state
 }
 
 /**
  * Decodifica o state e valida o HMAC.
- * Retorna { verifier, clientId } ou null se inválido.
+ * Retorna { verifier, clientId, clientSecret } ou null se inválido.
  */
-export function consumePkceState(state: string): { verifier: string; clientId: string } | null {
+export function consumePkceState(state: string): { verifier: string; clientId: string; clientSecret?: string } | null {
   try {
     const parts = state.split('.')
-    if (parts.length !== 3) {
+    if (parts.length !== 4) {
       console.warn(`[pkce-state] state inválido (partes: ${parts.length})`)
       return null
     }
-    const [verifierB64, clientIdB64, hmac] = parts
-    const payload = `${verifierB64}.${clientIdB64}`
+    const [verifierB64, clientIdB64, clientSecretB64, hmac] = parts
+    const payload = `${verifierB64}.${clientIdB64}.${clientSecretB64}`
     const expectedHmac = simpleHmac(payload)
     if (hmac !== expectedHmac) {
-      console.warn(`[pkce-state] HMAC inválido (esperado: ${expectedHmac.substring(0, 8)}..., recebido: ${hmac.substring(0, 8)}...)`)
+      console.warn(`[pkce-state] HMAC inválido`)
       return null
     }
     const verifier = base64UrlDecodeStr(verifierB64)
     const clientId = base64UrlDecodeStr(clientIdB64)
-    console.log(`[pkce-state] state válido: clientId=${clientId.substring(0, 10)}... verifier=${verifier.substring(0, 8)}...`)
-    return { verifier, clientId }
+    const clientSecret = base64UrlDecodeStr(clientSecretB64)
+    console.log(`[pkce-state] state válido: clientId=${clientId.substring(0, 10)}... verifier=${verifier.substring(0, 8)}... hasSecret=${!!clientSecret}`)
+    return { verifier, clientId, clientSecret: clientSecret || undefined }
   } catch (e) {
     console.warn(`[pkce-state] erro ao decodificar state:`, e)
     return null
   }
+}
+
+/**
+ * Tenta obter o Google OAuth Client Secret.
+ * Método 1: Variável de ambiente GOOGLE_OAUTH_CLIENT_SECRET
+ * Método 2: Busca da config do Firebase via API REST (quando disponível)
+ */
+export async function getGoogleClientSecret(): Promise<string | null> {
+  // Método 1: Variável de ambiente direta
+  if (process.env.GOOGLE_OAUTH_CLIENT_SECRET) {
+    console.log('[google-oauth] client_secret obtido de env var')
+    return process.env.GOOGLE_OAUTH_CLIENT_SECRET
+  }
+
+  // Método 2: Buscar da config do Firebase (nem sempre disponível)
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+
+  if (apiKey && projectId) {
+    try {
+      const res = await fetch(
+        `https://identitytoolkit.googleapis.com/v2/projects/${projectId}/oauthIdpConfigs/google?key=${apiKey}`
+      )
+      if (res.ok) {
+        const data = await res.json()
+        if (data.clientSecret) {
+          console.log('[google-oauth] client_secret obtido do Firebase config')
+          return data.clientSecret
+        }
+      }
+    } catch (e) {
+      // Firebase Admin API normalmente exige auth, então isso pode falhar silenciosamente
+    }
+  }
+
+  console.warn('[google-oauth] client_secret NÃO encontrado. Configure GOOGLE_OAUTH_CLIENT_SECRET no Render.')
+  return null
 }
 
 /** Gera uma string aleatória para verifier */
