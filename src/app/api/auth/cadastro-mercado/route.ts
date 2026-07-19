@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { sessionCookie, type SessionData } from '@/lib/auth'
 import { createHash } from 'crypto'
 import { emailBoasVindasMercado } from '@/lib/email'
+import { calcularDadosAcessoNovoMercado } from '@/lib/piloto'
 
 function soDigitos(s: string) {
   return (s || '').replace(/\D/g, '')
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
     }
 
     const agora = new Date()
-    const pilotoFim = new Date(agora.getTime() + 60 * 24 * 60 * 60 * 1000)
+    const { status, pilotoInicio, pilotoFim } = calcularDadosAcessoNovoMercado(agora)
 
     const mercado = await db.mercado.create({
       nome,
@@ -77,9 +78,9 @@ export async function POST(req: NextRequest) {
       emailLogin: email,
       senhaHash: hashSenha(senha),
       mensalidade: segmento === 'farmacias' ? 299 : segmento === 'petshops' ? 199 : 399,
-      status: 'piloto',
-      pilotoInicio: agora.toISOString(),
-      pilotoFim: pilotoFim.toISOString(),
+      status,
+      pilotoInicio,
+      pilotoFim,
       criadoEm: agora.toISOString(),
       destaque: false,
       latitude: null,

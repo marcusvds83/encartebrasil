@@ -31,6 +31,7 @@ import {
   AlertTriangle,
   ChevronRight,
   Banknote,
+  Clock,
 } from 'lucide-react'
 
 // ── Google Icon SVG ──
@@ -99,6 +100,13 @@ interface ContaData {
   ultimoPagamento?: string | null
   ultimoPagamentoValor?: number | null
   dataFimAcesso?: string | null
+  diasParaVencer?: number | null
+  dentroJanelaAviso?: boolean
+  dentroCarencia72h?: boolean
+  horasRestantesCarencia?: number | null
+  bloqueado?: boolean
+  emailSuporte?: string
+  dataEscolhaPagamento?: string | null
 }
 
 interface BITopProduto {
@@ -1225,20 +1233,32 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
     : null
 
   const isPilotoActive = conta.status === 'piloto' && pilotoDaysLeft !== null && pilotoDaysLeft > 0
-  const isPilotoExpirado = conta.statusEfetivo === 'piloto_expirado'
+  const isPilotoExpirado = conta.statusEfetivo === 'piloto_expirado' || conta.statusEfetivo === 'teste_gratis_expirado'
   const isAguardandoPagamento = conta.statusEfetivo === 'ativo_aguardando_pagamento'
   const isAssinaturaCancelada = conta.statusEfetivo === 'assinatura_cancelada'
+  const isPagamentoVencido = conta.statusEfetivo === 'pagamento_vencido'
+  const isAguardando72h = conta.statusEfetivo === 'aguardando_confirmacao_72h'
   const isAtivo = conta.status === 'ativo'
 
-  // ── Tela de bloqueio quando piloto expira, aguardando pagamento ou assinatura cancelada ──
-  if (isPilotoExpirado || isAguardandoPagamento || isAssinaturaCancelada) {
+  // ── Tela de bloqueio quando piloto/teste grátis expira, pagamento vencido, aguardando pagamento ou assinatura cancelada ──
+  if (isPilotoExpirado || isAguardandoPagamento || isAssinaturaCancelada || isPagamentoVencido) {
+    return <PaymentBlockScreen conta={conta} />
+  }
+
+  // ── Tela de carência 72h (escolheu pagamento mas aguarda confirmação) ──
+  if (isAguardando72h) {
     return <PaymentBlockScreen conta={conta} />
   }
 
   return (
     <div className="space-y-6">
-      {/* ── Aviso de renovação de assinatura ── */}
-      {isAtivo && conta.formaPagamento && conta.formaPagamento !== 'cartao_recorrente' && conta.dataProximoPagamento && (
+      {/* ── Popup D-3: aviso fechável 3 dias antes do vencimento ── */}
+      {conta.dentroJanelaAviso && !isAguardando72h && (
+        <PreVencimentoPopup conta={conta} />
+      )}
+
+      {/* ── Aviso de renovação de assinatura (mantido para compatibilidade) ── */}
+      {isAtivo && conta.formaPagamento && conta.formaPagamento !== 'cartao_recorrente' && conta.dataProximoPagamento && !conta.dentroJanelaAviso && (
         <RenewalWarningBanner conta={conta} />
       )}
 
@@ -2500,12 +2520,109 @@ function MetodoPagamentoSelector({
   )
 }
 
+// ── Popup D-3: Aviso fechável 3 dias antes do vencimento ──────────────────
+
+function PreVencimentoPopup({ conta }: { conta: ContaData }) {
+  const [dismissed, setDismissed] = useState(false)
+  const storageKey = `popup_venc_${conta.id}`
+
+  useEffect(() => {
+    // Verifica se foi dispensado nesta sessão de login
+    const last = localStorage.getItem(storageKey)
+    if (last) {
+      const elapsed = Date.now() - parseInt(last, 10)
+      // Reaparece após 1h ou em novo login (se passou mais de 12h)
+      if (elapsed < 60 * 60 * 1000) {
+        setDismissed(true)
+      }
+    }
+  }, [storageKey])
+
+  if (dismissed) return null
+
+  const dias = conta.diasParaVencer ?? 0
+  const isPiloto = conta.status === 'piloto' || conta.status === 'teste_gratis'
+  const tipoLabel = conta.status === 'teste_gratis' ? 'teste grátis' : isPiloto ? 'piloto' : 'assinatura'
+
+  const handleDismiss = () => {
+    localStorage.setItem(storageKey, Date.now().toString())
+    setDismissed(true)
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
+        <button
+          onClick={handleDismiss}
+          className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 text-xl leading-none"
+          aria-label="Fechar"
+        >
+          ✕
+        </button>
+
+        <div className="text-center">
+          <div className="h-14 w-14 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Clock className="h-7 w-7 text-orange-600" />
+          </div>
+
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            {dias === 0 ? 'Seu ' + tipoLabel + ' vence hoje!' : `Faltam ${dias} dia${dias !== 1 ? 's' : ''} para o vencimento`}
+          </h3>
+
+          <p className="text-sm text-gray-600 mb-4">
+            {isPiloto
+              ? `Seu período de ${tipoLabel} termina em ${dias === 0 ? 'hoje' : `${dias} dia${dias !== 1 ? 's' : ''}`}. `
+              : `Sua assinatura mensal vence em ${dias === 0 ? 'hoje' : `${dias} dia${dias !== 1 ? 's' : ''}`}. `}
+            Escolha sua forma de pagamento para continuar usando o app sem interrupção.
+          </p>
+
+          {conta.formaPagamento ? (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-green-800 font-medium">
+                ✓ Você já escolheu: {conta.formaPagamento === 'pix' ? 'Pix' : conta.formaPagamento === 'cartao_mensal' ? 'Cartão (Mensal)' : conta.formaPagamento === 'cartao_recorrente' ? 'Cartão (Recorrente)' : 'Boleto'}
+              </p>
+              <p className="text-xs text-green-700 mt-1">Aguarde a confirmação do pagamento.</p>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500 mb-4">
+              Após o vencimento, você terá 3 dias (72h) de carência após escolher o pagamento.
+            </p>
+          )}
+
+          <button
+            onClick={handleDismiss}
+            className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 rounded-lg text-sm transition-colors"
+          >
+            Continuar usando
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Tela de Bloqueio / Seleção de Pagamento ────────────────────────────────
 
 function PaymentBlockScreen({ conta }: { conta: ContaData }) {
   const segmentoLabel = conta.segmento === 'farmacias' ? 'Farmácia' : conta.segmento === 'petshops' ? 'PetShop' : 'Empresa'
   const isAguardando = conta.status === 'ativo_aguardando_pagamento' || conta.statusEfetivo === 'ativo_aguardando_pagamento'
   const isCancelado = conta.statusEfetivo === 'assinatura_cancelada'
+  const isAguardando72h = conta.statusEfetivo === 'aguardando_confirmacao_72h'
+  const isPagamentoVencido = conta.statusEfetivo === 'pagamento_vencido'
+  const isTesteGratisExpirado = conta.statusEfetivo === 'teste_gratis_expirado'
+  const emailSuporte = (conta as any).emailSuporte || 'notifications@panfletosbrasil.odoo.com'
+
+  const titulo = isAguardando72h
+    ? 'Aguardando Confirmação de Pagamento'
+    : isCancelado
+      ? 'Assinatura Encerrada'
+      : isAguardando
+        ? 'Ative Sua Assinatura'
+        : isPagamentoVencido
+          ? 'Pagamento Vencido'
+          : isTesteGratisExpirado
+            ? 'Teste Grátis Encerrado'
+            : 'Período de Piloto Encerrado'
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center p-4">
@@ -2515,9 +2632,7 @@ function PaymentBlockScreen({ conta }: { conta: ContaData }) {
           <div className="h-16 w-16 mx-auto mb-3 bg-white/20 rounded-full flex items-center justify-center">
             <Lock className="h-8 w-8 text-white" />
           </div>
-          <h2 className="text-xl font-bold text-white">
-            {isCancelado ? 'Assinatura Encerrada' : isAguardando ? 'Ative Sua Assinatura' : 'Período de Piloto Encerrado'}
-          </h2>
+          <h2 className="text-xl font-bold text-white">{titulo}</h2>
           <p className="text-white/80 text-sm mt-1">
             {conta.nome}
           </p>
@@ -2525,31 +2640,84 @@ function PaymentBlockScreen({ conta }: { conta: ContaData }) {
 
         {/* Body */}
         <div className="p-6 space-y-5">
-          <div className="text-center">
-            <p className="text-gray-600 text-sm">
-              {isCancelado
-                ? 'Sua assinatura foi cancelada. Para voltar a utilizar o Panfletos Brasil, escolha sua forma de pagamento abaixo.'
-                : isAguardando
-                  ? 'Sua empresa foi ativada pelo administrador! Para começar a utilizar o Panfletos Brasil, escolha sua forma de pagamento.'
-                  : 'Seu período de teste de 60 dias terminou. Para continuar utilizando o Panfletos Brasil, escolha sua forma de pagamento.'}
-            </p>
-          </div>
+          {isAguardando72h ? (
+            <div className="text-center space-y-4">
+              <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                <p className="text-sm text-orange-800 font-medium">
+                  Você escolheu sua forma de pagamento. Aguarde a confirmação.
+                </p>
+                <p className="text-2xl font-bold text-orange-700 mt-2">
+                  {conta.horasRestantesCarencia != null ? `${conta.horasRestantesCarencia}h restantes` : '72h restantes'}
+                </p>
+                <p className="text-xs text-orange-600 mt-1">
+                  Você pode usar o sistema por mais 3 dias (72h) enquanto aguarda confirmação.
+                </p>
+              </div>
 
-          {/* Valor */}
-          <div className="bg-gray-50 rounded-xl p-4 text-center">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Mensalidade — {segmentoLabel}</p>
-            <p className="text-3xl font-bold text-gray-800 mt-1">
-              R$ {conta.mensalidade || 399},00
-            </p>
-            <p className="text-xs text-gray-400 mt-1">/mês</p>
-          </div>
+              <div className="bg-gray-50 rounded-xl p-4 text-center">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Mensalidade — {segmentoLabel}</p>
+                <p className="text-3xl font-bold text-gray-800 mt-1">
+                  R$ {conta.mensalidade || 399},00
+                </p>
+                <p className="text-xs text-gray-400 mt-1">/mês</p>
+              </div>
 
-          {/* Payment method selector */}
-          <MetodoPagamentoSelector formaPagamentoAtual={conta.formaPagamento} />
+              {/* Payment method selector (pode trocar) */}
+              <MetodoPagamentoSelector formaPagamentoAtual={conta.formaPagamento} />
 
-          <p className="text-[10px] text-gray-400 text-center">
-            Após escolher, o administrador enviará o contrato e link de pagamento por e-mail.
-          </p>
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs text-gray-500 text-center">
+                  Caso o pagamento não seja confirmado em 72h, o sistema será suspenso.
+                </p>
+                <p className="text-xs text-gray-600 text-center mt-2">
+                  Para reativar o app via pagamento, entre em contato:<br />
+                  <a href={`mailto:${emailSuporte}`} className="text-red-600 font-semibold hover:underline">
+                    {emailSuporte}
+                  </a>
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="text-center">
+                <p className="text-gray-600 text-sm">
+                  {isCancelado
+                    ? 'Sua assinatura foi cancelada. Para voltar a utilizar o Panfletos Brasil, escolha sua forma de pagamento abaixo.'
+                    : isAguardando
+                      ? 'Sua empresa foi ativada pelo administrador! Para começar a utilizar o Panfletos Brasil, escolha sua forma de pagamento.'
+                      : isPagamentoVencido
+                        ? 'Seu pagamento mensal venceu. Escolha sua forma de pagamento para continuar.'
+                        : isTesteGratisExpirado
+                          ? 'Seu período de teste grátis terminou. Para continuar, escolha sua forma de pagamento.'
+                          : 'Seu período de piloto terminou. Para continuar utilizando o Panfletos Brasil, escolha sua forma de pagamento.'}
+                </p>
+              </div>
+
+              {/* Valor */}
+              <div className="bg-gray-50 rounded-xl p-4 text-center">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Mensalidade — {segmentoLabel}</p>
+                <p className="text-3xl font-bold text-gray-800 mt-1">
+                  R$ {conta.mensalidade || 399},00
+                </p>
+                <p className="text-xs text-gray-400 mt-1">/mês</p>
+              </div>
+
+              {/* Payment method selector */}
+              <MetodoPagamentoSelector formaPagamentoAtual={conta.formaPagamento} />
+
+              <div className="border-t border-gray-100 pt-3">
+                <p className="text-[10px] text-gray-400 text-center">
+                  Após escolher, você terá 3 dias (72h) para confirmar o pagamento.
+                </p>
+                <p className="text-xs text-gray-600 text-center mt-2">
+                  Em caso de não confirmação, contate:<br />
+                  <a href={`mailto:${emailSuporte}`} className="text-red-600 font-semibold hover:underline">
+                    {emailSuporte}
+                  </a>
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

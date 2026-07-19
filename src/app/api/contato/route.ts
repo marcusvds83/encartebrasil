@@ -97,6 +97,8 @@ export async function POST(req: NextRequest) {
     ].join('\n')
 
     // Envia para Odoo Helpdesk via webhook
+    let odooOk = false
+    let odooErroMsg = ''
     try {
       const odooPayload = {
         name: assunto,
@@ -121,11 +123,22 @@ export async function POST(req: NextRequest) {
       const odooBody = await odooRes.text().catch(() => '')
       if (odooRes.ok) {
         console.log(`[contato] Odoo OK — status ${odooRes.status} body: ${odooBody}`)
+        odooOk = true
       } else {
+        odooErroMsg = `Erro ${odooRes.status}: ${odooBody.substring(0, 200)}`
         console.error(`[contato] Odoo erro ${odooRes.status}: ${odooBody}`)
       }
     } catch (odooErr: any) {
-      console.error(`[contato] Odoo falha: ${odooErr?.message || odooErr}`)
+      odooErroMsg = odooErr?.message || String(odooErr)
+      console.error(`[contato] Odoo falha: ${odooErroMsg}`)
+    }
+
+    if (!odooOk) {
+      // Propaga erro para o usuário (toast de falha)
+      return NextResponse.json(
+        { erro: 'Não foi possível enviar o chamado para o suporte. Tente novamente ou contate notifications@panfletosbrasil.odoo.com', detalhe: odooErroMsg },
+        { status: 502 },
+      )
     }
 
     return NextResponse.json({ ok: true, mensagem: 'Mensagem enviada com sucesso!' })

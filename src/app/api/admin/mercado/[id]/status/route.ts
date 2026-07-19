@@ -18,7 +18,7 @@ export async function PATCH(
     const { id } = await params
     const { status } = await req.json()
 
-    const statusValidos = ['piloto', 'ativo', 'inativo', 'suspenso']
+    const statusValidos = ['piloto', 'teste_gratis', 'ativo', 'inativo', 'suspenso', 'ativo_aguardando_pagamento']
     if (!statusValidos.includes(status)) {
       return NextResponse.json({ erro: 'Status inválido. Use: ' + statusValidos.join(', ') }, { status: 400 })
     }

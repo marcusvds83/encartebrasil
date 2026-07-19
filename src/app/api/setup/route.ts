@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createHash } from 'crypto'
+import { calcularDadosAcessoNovoMercado } from '@/lib/piloto'
 
 function hashSenha(s: string) {
   return createHash('sha256').update(s).digest('hex')
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
     let mercadoId: string = ''
     if (!mercadoExistente) {
       const agora = new Date()
-      const pilotoFim = new Date(agora.getTime() + 60 * 24 * 60 * 60 * 1000)
+      const { status, pilotoInicio, pilotoFim } = calcularDadosAcessoNovoMercado(agora)
       const novoMercado: any = await db.mercado.create({
         nome: 'Supermercado Central Demo',
         cnpj: '11222333000181',
@@ -42,9 +43,9 @@ export async function GET(req: NextRequest) {
         emailLogin: 'super@central.com',
         senhaHash: hashSenha('super123'),
         mensalidade: 399,
-        status: 'piloto',
-        pilotoInicio: agora.toISOString(),
-        pilotoFim: pilotoFim.toISOString(),
+        status,
+        pilotoInicio,
+        pilotoFim,
         criadoEm: agora.toISOString(),
         destaque: true,
         destaqueInicio: agora.toISOString(),

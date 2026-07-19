@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { createHash } from 'crypto'
+import { calcularDadosAcessoNovoMercado } from '@/lib/piloto'
 
 function soDigitos(s: string) {
   return (s || '').replace(/\D/g, '')
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
 
     const hash = senha ? createHash('sha256').update(senha).digest('hex') : ''
     const agora = new Date()
-    const pilotoFim = new Date(agora.getTime() + 60 * 24 * 60 * 60 * 1000)
+    const { status, pilotoInicio, pilotoFim } = calcularDadosAcessoNovoMercado(agora)
 
     const mercado = await db.mercado.create({
       nome,
@@ -53,9 +54,9 @@ export async function POST(req: NextRequest) {
       emailLogin: email,
       senhaHash: hash,
       mensalidade: mensalidade || 399,
-      status: 'piloto',
-      pilotoInicio: agora.toISOString(),
-      pilotoFim: pilotoFim.toISOString(),
+      status,
+      pilotoInicio,
+      pilotoFim,
       criadoEm: agora.toISOString(),
       destaque: false,
       latitude: null,

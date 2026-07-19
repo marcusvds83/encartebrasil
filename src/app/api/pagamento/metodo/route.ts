@@ -92,29 +92,57 @@ export async function POST(req: NextRequest) {
       ].join('\n'),
     }
 
-    // Fire-and-forget webhook para Odoo CRM
+    // Webhook para Odoo CRM com await + retry (não é mais fire-and-forget)
     console.log(`[pagamento/metodo] Enviando para CRM Odoo: ${JSON.stringify(crmPayload)}`)
-    fetch(ODOO_CRM_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(crmPayload),
-    })
-      .then((res) => {
-        if (res.ok) {
-          console.log(`[pagamento/metodo] CRM OK — status ${res.status}`)
+
+    let crmOk = false
+    let crmErro = ''
+    const maxRetries = 2
+    for (let tentativa = 1; tentativa <= maxRetries; tentativa++) {
+      try {
+        const crmRes = await fetch(ODOO_CRM_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            // Adiciona api-key se disponível (mesmo padrão do Helpdesk)
+            ...(process.env.ODOO_CRM_API_KEY ? { 'api-key': process.env.ODOO_CRM_API_KEY } : {}),
+          },
+          body: JSON.stringify(crmPayload),
+        })
+
+        const crmBody = await crmRes.text().catch(() => '')
+
+        if (crmRes.ok) {
+          console.log(`[pagamento/metodo] CRM OK (tentativa ${tentativa}) — status ${crmRes.status} body: ${crmBody.substring(0, 200)}`)
+          crmOk = true
+          break
         } else {
-          res.text().then((t) => console.error(`[pagamento/metodo] CRM erro ${res.status}: ${t}`))
+          crmErro = `status ${crmRes.status}: ${crmBody.substring(0, 200)}`
+          console.error(`[pagamento/metodo] CRM erro (tentativa ${tentativa}) — ${crmErro}`)
         }
-      })
-      .catch((err) => {
-        console.error('[pagamento/metodo] erro ao enviar webhook CRM:', err)
-      })
+      } catch (err: any) {
+        crmErro = err?.message || String(err)
+        console.error(`[pagamento/metodo] CRM falha de rede (tentativa ${tentativa}):`, crmErro)
+      }
+
+      // Backoff antes da próxima tentativa
+      if (tentativa < maxRetries) {
+        await new Promise((r) => setTimeout(r, 1000 * tentativa))
+      }
+    }
+
+    if (!crmOk) {
+      console.error(`[pagamento/metodo] CRM falhou após ${maxRetries} tentativas: ${crmErro}`)
+      // Não bloqueia o usuário — o pagamento foi salvo no DB
+      // Mas retorna aviso para o admin verificar
+    }
 
     return NextResponse.json({
       ok: true,
       metodo,
       metodoLabel: METODO_LABEL[metodo],
       mensagem: 'Solicitação enviada! O administrador enviará o contrato e link de pagamento por e-mail.',
+      crmEnviado: crmOk,
     })
   } catch (e) {
     console.error('[pagamento/metodo] erro:', e)

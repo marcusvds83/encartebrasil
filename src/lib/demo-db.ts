@@ -114,7 +114,8 @@ const admins: Admin[] = [
 ]
 
 const agora = new Date()
-const pilotoFim = new Date(agora.getTime() + 60 * 24 * 60 * 60 * 1000)
+// Piloto global até 01/10/2026
+const pilotoFim = new Date('2026-10-01T00:00:00-03:00')
 
 const mercados: Mercado[] = [
   {
@@ -229,7 +230,7 @@ export const demoDb = {
         destaqueInicio: data.destaqueInicio || null,
         destaqueFim: data.destaqueFim || null,
         pilotoInicio: data.pilotoInicio || new Date().toISOString(),
-        pilotoFim: data.pilotoFim || new Date(Date.now() + 60 * 86400000).toISOString(),
+        pilotoFim: data.pilotoFim || new Date('2026-10-01T00:00:00-03:00').toISOString(),
         mensalidade: data.mensalidade || 399,
         status: data.status || 'piloto',
         criadoEm: data.criadoEm || new Date().toISOString(),

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { calcularStatusEfetivo, EMAIL_SUPORTE } from '@/lib/piloto'
 
 export async function GET() {
   try {
@@ -24,33 +25,8 @@ export async function GET() {
     const m = mercado as any
     const agora = new Date()
 
-    // ── Computa statusEfetivo ──
-    let statusEfetivo = m.status
-
-    // 1. Piloto expirado
-    if (m.status === 'piloto' && m.pilotoFim && agora > new Date(m.pilotoFim)) {
-      statusEfetivo = 'piloto_expirado'
-    }
-
-    // 2. Aguardando pagamento (admin ativou mas não pagou)
-    if (m.status === 'ativo_aguardando_pagamento') {
-      statusEfetivo = 'ativo_aguardando_pagamento'
-    }
-
-    // 3. Assinatura cancelada com carência (30 dias após último pagamento)
-    if (m.status === 'ativo' && m.formaPagamento && m.ultimoPagamento && !m.dataProximoPagamento) {
-      const diasDesdePagamento = (agora.getTime() - new Date(m.ultimoPagamento).getTime()) / (1000 * 60 * 60 * 24)
-      if (diasDesdePagamento > 30) {
-        statusEfetivo = 'assinatura_cancelada'
-      } else {
-        statusEfetivo = 'ativo_carencia'
-      }
-    }
-
-    // 4. Próximo pagamento vencido (sem pagar no mês seguinte)
-    if (m.status === 'ativo' && m.dataProximoPagamento && new Date(m.dataProximoPagamento) < agora) {
-      statusEfetivo = 'pagamento_vencido'
-    }
+    // Usa helper centralizado para calcular status efetivo
+    const statusInfo = calcularStatusEfetivo(m, agora)
 
     // Encartes ativos (concluídos e não expirados)
     const todosEncartes = await db.encarte.findMany({ where: { mercadoId: mercado.id } })
@@ -64,19 +40,19 @@ export async function GET() {
     const totalEncartes = encartesAtivos.length
     const totalCliques = await db.cliqueProduto.count({ where: { mercadoId: mercado.id } })
 
-    // Data fim do acesso (para carência)
-    let dataFimAcesso: string | null = null
-    if (m.ultimoPagamento && statusEfetivo === 'ativo_carencia') {
-      dataFimAcesso = new Date(new Date(m.ultimoPagamento).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
-    }
-
     return NextResponse.json({
       ...mercado,
-      statusEfetivo,
+      statusEfetivo: statusInfo.statusEfetivo,
+      diasParaVencer: statusInfo.diasParaVencer,
+      dentroJanelaAviso: statusInfo.dentroJanelaAviso,
+      dentroCarencia72h: statusInfo.dentroCarencia72h,
+      horasRestantesCarencia: statusInfo.horasRestantesCarencia,
+      dataFimAcesso: statusInfo.dataFimAcesso,
+      bloqueado: statusInfo.bloqueado,
+      emailSuporte: EMAIL_SUPORTE,
       totalProdutos,
       totalEncartes,
       totalCliques,
-      dataFimAcesso,
     })
   } catch (e) {
     console.error('[conta] erro:', e)
