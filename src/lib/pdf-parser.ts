@@ -62,13 +62,20 @@ const LEGAL_PATTERNS = [
 const UNIT_ONLY = /^(un\.?|kg|g|ml|l|cx|pct|dz|unidade)$/i
 
 // Preço no INÍCIO da linha (formato 1: preço em linha separada)
-const PRICE_LINE_REGEX = /^R\$\s*(\d+[.,]\d{2})/
+// Aceita: R$ 19,90 | R$ 19.90 | R$19,90 | 19,90 | 19.90
+const PRICE_LINE_REGEX = /^(?:R\$\s*)?(\d{1,4}(?:\.\d{3})*[.,]\d{2})/
 
 // Preço em QUALQUER posição da linha (formato 2: preço inline)
-const PRICE_INLINE_REGEX = /R\$\s*(\d+[.,]\d{2})/
+const PRICE_INLINE_REGEX = /(?:R\$\s*)?(\d{1,4}(?:\.\d{3})*[.,]\d{2})/g
+
+// Preço com R$ (para verificar se linha tem preço real, não só números soltos)
+const HAS_REAL_PRICE = /R\$\s*\d{1,4}(?:\.\d{3})*[.,]\d{2}/
+
+// Número decimal solto no final da linha (formato: "Detergente 500ml Ype" \n "1,99")
+const BARE_PRICE_REGEX = /^(\d{1,4}(?:\.\d{3})*[.,]\d{2})$/
 
 // Unidade após preço
-const PRICE_UNIT_REGEX = /R\$\s*[\d.,]+\s*(un\.?|kg|g|ml|l)/i
+const PRICE_UNIT_REGEX = /(?:R\$\s*)?[\d.,]+\s*(un\.?|kg|g|ml|l)/i
 
 // Padrão para detectar preço com unidade no final: "R$ 5,49" ou "R$ 5,49 un."
 const TAIL_PRICE_REGEX = /R\$\s*\d+[.,]\d{2}\s*(un\.?|kg|g|ml|l)?\s*$/
@@ -114,11 +121,11 @@ function isNoise(line: string): boolean {
 
   // Cabeçalhos de seção curtos sem preço
   for (const header of SECTION_HEADERS) {
-    if (header.test(trimmed) && trimmed.length < 40 && !PRICE_INLINE_REGEX.test(trimmed)) return true
+    if (header.test(trimmed) && trimmed.length < 40 && !HAS_REAL_PRICE.test(trimmed)) return true
   }
 
   // "AÇOUGUE & FRIOS (PREÇO POR KG)" — header composto sem preço real
-  if (/\&\s*(FRIOS|DERIVADOS|BÁSICOS)/i.test(trimmed) && !PRICE_INLINE_REGEX.test(trimmed)) return true
+  if (/\&\s*(FRIOS|DERIVADOS|BÁSICOS)/i.test(trimmed) && !HAS_REAL_PRICE.test(trimmed)) return true
   if (/\(PREÇO\s+POR\s+KG\)/i.test(trimmed)) return true
 
   // Emojis puros
@@ -131,13 +138,13 @@ function isNoise(line: string): boolean {
   if (/^PRODUTO\s+UNIDADE\s+PREÇO/i.test(trimmed)) return true
 
   // Nome do mercado curto sem preço
-  if (/^(SUPERMERCADO|MERCADO|ATACADO)\s+/i.test(trimmed) && trimmed.length < 40 && !PRICE_INLINE_REGEX.test(trimmed)) return true
+  if (/^(SUPERMERCADO|MERCADO|ATACADO)\s+/i.test(trimmed) && trimmed.length < 40 && !HAS_REAL_PRICE.test(trimmed)) return true
 
   // "DE R$ XX POR APENAS" — frase de marketing
   if (/^DE\s+R\$\s*\d+[.,]\d{2}\s+POR\s+APENAS/i.test(trimmed)) return true
 
   // Emojis com texto curto tipo "🔥 ENCARTE ESPECIAL"
-  if (/^[\u{1F300}-\u{1FAFF}]/u.test(trimmed) && trimmed.length < 80 && !PRICE_INLINE_REGEX.test(trimmed)) return true
+  if (/^[\u{1F300}-\u{1FAFF}]/u.test(trimmed) && trimmed.length < 80 && !HAS_REAL_PRICE.test(trimmed)) return true
 
   // "O ORGULHO DE ECONOMIZAR..." — slogan
   if (/^(O\s+)?ORGULHO\s+DE/i.test(trimmed)) return true
@@ -216,11 +223,44 @@ function extractStandaloneUnit(text: string): string | null {
  * Formato: "Banana Caturra kg R$ 4,99" ou "Arroz Tipo 1 5 kg pacote R$ 24,90"
  */
 function tryParseInline(line: string): ProdutoExtraido | null {
-  // Precisa ter R$ XX,XX em algum lugar
-  const priceMatch = line.match(PRICE_INLINE_REGEX)
+  // Precisa ter preço em algum lugar (R$ XX,XX ou só XX,XX se a linha for curta o suficiente)
+  // Reset regex (global flag)
+  PRICE_INLINE_REGEX.lastIndex = 0
+  const priceMatch = PRICE_INLINE_REGEX.exec(line)
   if (!priceMatch) return null
 
-  const precoStr = `R$ ${priceMatch[1].replace('.', ',')}`
+  // Se não tem R$, verifica se é um preço solto válido (não é CPF, telefone, etc)
+  const hasRS = /R\$\s*\d/.test(line)
+  if (!hasRS) {
+    // Sem R$: só aceita se o número tiver vírgula decimal (formato BR)
+    // e estiver no final da linha
+    const bare = priceMatch[0]
+    if (!bare.includes(',')) return null
+    // Rejeita se parece CPF (XXX.XXX.XXX-XX) ou telefone
+    if (/\d{3}\.\d{3}/.test(line.replace(bare, ''))) return null
+  }
+
+  // Normaliza preço: sempre R$ XX,XX (vírgula decimal)
+  // Detecta se é formato BR (vírgula decimal) ou US (ponto decimal)
+  let precoRaw = priceMatch[1]
+  // Se tem vírgula: formato BR (ex: 1.299,90 → 1299.90)
+  if (precoRaw.includes(',')) {
+    precoRaw = precoRaw.replace(/\./g, '').replace(',', '.')
+  } else if (precoRaw.includes('.')) {
+    // Se tem ponto mas não vírgula: pode ser decimal US (12.90) ou milhar BR (1.299)
+    // Se tem 2 dígitos após o último ponto: é decimal (12.90 → 12.90)
+    const parts = precoRaw.split('.')
+    if (parts[parts.length - 1].length === 2) {
+      // Decimal: 12.90 → remove pontos de milhar se houver e mantém como decimal
+      precoRaw = parts.length > 2
+        ? parts.slice(0, -1).join('') + '.' + parts[parts.length - 1]
+        : precoRaw
+    } else {
+      // Milhar sem decimal: 1.299 → 1299
+      precoRaw = precoRaw.replace(/\./g, '')
+    }
+  }
+  const precoStr = `R$ ${Number(precoRaw).toFixed(2).replace('.', ',')}`
   const priceIndex = priceMatch.index!
 
   // Tudo antes do R$ é o candidato a nome + unidade
@@ -282,11 +322,14 @@ export function parseProdutosDoTexto(text: string): ProdutoExtraido[] {
   const seenKeys = new Set<string>()
 
   // ── PASSO 1: Linhas com preço inline (formato tabela) ─────────────────
+  // Processa TODAS as linhas que têm preço inline (nome + R$ XX,XX na mesma linha)
   for (let i = 0; i < lines.length; i++) {
     if (usedIndices.has(i)) continue
     if (isNoise(lines[i])) continue
-    // Skip se começa com R$ (é preço em linha separada, trata no passo 2)
-    if (PRICE_LINE_REGEX.test(lines[i])) continue
+
+    // Pula linhas que SÃO SÓ preço (sem nome) — essas são tratadas no PASSO 2
+    // Mas NÃO pula linhas que têm nome + preço inline
+    if (BARE_PRICE_REGEX.test(lines[i])) continue
 
     // Verifica se a linha tem múltiplos preços (colunas fundidas)
     const priceMatches = lines[i].match(/R\$\s*\d+[.,]\d{2}/g)
@@ -328,26 +371,37 @@ export function parseProdutosDoTexto(text: string): ProdutoExtraido[] {
     const line = lines[i]
     if (usedIndices.has(i)) continue
     if (isNoise(line)) continue
-    // Skip se é linha de preço
-    if (PRICE_LINE_REGEX.test(line)) continue
-    // Skip se tem preço inline (já tratado no passo 1)
-    if (PRICE_INLINE_REGEX.test(line)) continue
+    // Skip se é linha de preço ou tem preço inline (já tratado no passo 1)
+    if (HAS_REAL_PRICE.test(line) || BARE_PRICE_REGEX.test(line)) continue
     // Precisa ter pelo menos 3 letras
     const letters = line.replace(/[^a-zA-ZÁÉÍÓÚÃÕÂÊÎÔÛÇàáéíóúãõâêîôûç]/g, '')
     if (letters.length < 3) continue
     // Muito curto
     if (line.length < 4) continue
 
-    // Busca preço nas próximas 1-5 linhas
+    // Busca preço nas próximas 1-5 linhas (com ou sem R$)
     let precoStr: string | null = null
     let priceLineIndex = -1
     let priceUnit: string | null = null
 
     for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
       if (usedIndices.has(j)) continue
-      const priceMatch = lines[j].match(PRICE_LINE_REGEX)
+      // Tenta com R$ primeiro
+      let priceMatch = lines[j].match(HAS_REAL_PRICE)
+      if (!priceMatch) {
+        // Tenta preço solto (só número decimal no formato BR)
+        const bare = lines[j].match(BARE_PRICE_REGEX)
+        if (bare && bare[1].includes(',')) {
+          priceMatch = bare as any
+        }
+      }
       if (priceMatch) {
-        precoStr = `R$ ${priceMatch[1].replace('.', ',')}`
+        // Extrai o número do preço
+        const numMatch = lines[j].match(/(\d{1,4}(?:\.\d{3})*[.,]\d{2})/)
+        if (numMatch) {
+          const precoNum = numMatch[1].replace(/\./g, '').replace(',', '.')
+          precoStr = `R$ ${Number(precoNum).toFixed(2).replace('.', ',')}`
+        }
         priceUnit = extractUnitFromPriceLine(lines[j])
         priceLineIndex = j
         break
