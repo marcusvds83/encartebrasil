@@ -167,42 +167,49 @@ export function calcularStatusEfetivo(
     }
   }
 
-  // 5. Janela de aviso D-3 (apenas se NÃO for cartão recorrente)
-  // Mostra aviso quando faltam 3 dias OU quando já venceu mas está em carência 72h
-  if (
-    diasParaVencer !== null &&
-    diasParaVencer <= DIAS_AVISO_PRE_VENC &&
-    mercado.formaPagamento !== 'cartao_recorrente'
-  ) {
-    // Aviso D-3 aplica-se a piloto, teste_gratis e ativo (com dataProximoPagamento)
-    if (
-      statusEfetivo === 'piloto' ||
-      statusEfetivo === 'teste_gratis' ||
-      (statusEfetivo === 'ativo' && !!mercado.dataProximoPagamento) ||
-      statusEfetivo === 'aguardando_confirmacao_72h'
-    ) {
-      dentroJanelaAviso = true
-    }
-  }
+  // 5. Janela de aviso D-3 — SIMPLIFICADO
+  // Sempre verifica TODAS as datas de vencimento possíveis:
+  // - pilotoFim (para piloto, teste_gratis, e ativo que ainda tem pilotoFim)
+  // - dataProximoPagamento (para ativo com mensalidade)
+  // Se qualquer uma estiver dentro de 3 dias (ou vencida em carência 72h) → popup
+  // EXCETO cartao_recorrente (isento de avisos)
 
-  // Aviso D-3 para ativo com dataProximoPagamento
-  if (statusEfetivo === 'ativo' && mercado.dataProximoPagamento && mercado.formaPagamento !== 'cartao_recorrente') {
-    const diasParaProxPagto = Math.ceil(
-      (new Date(mercado.dataProximoPagamento).getTime() - agora.getTime()) / (1000 * 60 * 60 * 24),
-    )
-    if (diasParaProxPagto >= 0 && diasParaProxPagto <= DIAS_AVISO_PRE_VENC) {
-      dentroJanelaAviso = true
-      if (diasParaVencer === null) diasParaVencer = diasParaProxPagto
-    }
-  }
-
+  // Calcula bloqueado ANTES do D-3 (para não mostrar popup se bloqueou)
   const bloqueado = [
     'piloto_expirado',
     'teste_gratis_expirado',
-    'ativo_aguardando_pagamento',
     'assinatura_cancelada',
     'pagamento_vencido',
   ].includes(statusEfetivo)
+
+  if (mercado.formaPagamento !== 'cartao_recorrente' && !bloqueado) {
+    // Verifica pilotoFim
+    if (mercado.pilotoFim) {
+      const diasPiloto = Math.ceil((new Date(mercado.pilotoFim).getTime() - agora.getTime()) / (1000 * 60 * 60 * 24))
+      if (diasPiloto <= DIAS_AVISO_PRE_VENC) {
+        dentroJanelaAviso = true
+        if (diasParaVencer === null || diasPiloto < diasParaVencer) {
+          diasParaVencer = diasPiloto
+        }
+      }
+    }
+
+    // Verifica dataProximoPagamento (para ativos)
+    if (mercado.dataProximoPagamento) {
+      const diasProxPagto = Math.ceil((new Date(mercado.dataProximoPagamento).getTime() - agora.getTime()) / (1000 * 60 * 60 * 24))
+      if (diasProxPagto <= DIAS_AVISO_PRE_VENC) {
+        dentroJanelaAviso = true
+        if (diasParaVencer === null || diasProxPagto < diasParaVencer) {
+          diasParaVencer = diasProxPagto
+        }
+      }
+    }
+
+    // Também ativa se está em carência 72h
+    if (dentroCarencia72h) {
+      dentroJanelaAviso = true
+    }
+  }
 
   return {
     statusEfetivo,

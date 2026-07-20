@@ -2692,20 +2692,9 @@ function PagamentoPendenteSelector({ conta, onDismiss }: { conta: ContaData; onD
 }
 
 function PreVencimentoPopup({ conta }: { conta: ContaData }) {
+  // SEM localStorage — popup SEMPRE aparece ao montar (login/page load)
+  // Usuário pode fechar, mas reaparece no próximo login ou refresh
   const [dismissed, setDismissed] = useState(false)
-  const storageKey = `popup_venc_${conta.id}`
-
-  useEffect(() => {
-    // Verifica se foi dispensado nesta sessão de login
-    const last = localStorage.getItem(storageKey)
-    if (last) {
-      const elapsed = Date.now() - parseInt(last, 10)
-      // Reaparece após 1h (para empresa ver novamente) ou em novo login
-      if (elapsed < 60 * 60 * 1000) {
-        setDismissed(true)
-      }
-    }
-  }, [storageKey])
 
   if (dismissed) return null
 
@@ -2717,7 +2706,6 @@ function PreVencimentoPopup({ conta }: { conta: ContaData }) {
   const horas = conta.horasRestantesCarencia ?? 72
 
   const handleDismiss = () => {
-    localStorage.setItem(storageKey, Date.now().toString())
     setDismissed(true)
   }
 
