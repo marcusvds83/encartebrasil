@@ -1240,19 +1240,24 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
   const isAguardando72h = conta.statusEfetivo === 'aguardando_confirmacao_72h'
   const isAtivo = conta.status === 'ativo'
 
-  // ── Tela de bloqueio quando piloto/teste grátis expira SEM carência,
-  // pagamento vencido SEM carência, aguardando pagamento ou assinatura cancelada ──
-  // IMPORTANTE: isAguardando72h NÃO bloqueia — a empresa pode continuar usando
-  // durante os 3 dias de carência, apenas vê o popup (fechável)
-  if (isPilotoExpirado || isAguardandoPagamento || isAssinaturaCancelada || isPagamentoVencido) {
+  // ── Tela de bloqueio: APENAS quando piloto/teste grátis expira SEM carência,
+  // pagamento vencido SEM carência, ou assinatura cancelada ──
+  // IMPORTANTE: isAguardandoPagamento e isAguardando72h NÃO bloqueiam —
+  // a empresa pode continuar usando e fechar o popup
+  if (isPilotoExpirado || isAssinaturaCancelada || isPagamentoVencido) {
     return <PaymentBlockScreen conta={conta} />
   }
 
   return (
     <div className="space-y-6">
-      {/* ── Popup D-3: aviso fechável (3 dias antes do vencimento OU durante carência 72h) ── */}
-      {/* Durante carência 72h, popup mostra horas restantes — empresa pode fechar e continuar usando */}
-      {conta.dentroJanelaAviso && (
+      {/* ── Popup de aviso fechável ── */}
+      {/* Aparece quando:
+        - 3 dias antes do vencimento (D-3)
+        - Durante carência 72h (escolheu pagamento, aguarda confirmação)
+        - Admin marcou como pendente (ativo_aguardando_pagamento)
+        - Empresa pode SEMPRE fechar e continuar usando
+      */}
+      {(conta.dentroJanelaAviso || isAguardandoPagamento || isAguardando72h) && (
         <PreVencimentoPopup conta={conta} />
       )}
 
@@ -2627,6 +2632,7 @@ function PreVencimentoPopup({ conta }: { conta: ContaData }) {
   const isPiloto = conta.status === 'piloto' || conta.status === 'teste_gratis'
   const tipoLabel = conta.status === 'teste_gratis' ? 'teste grátis' : isPiloto ? 'piloto' : 'assinatura'
   const isCarencia72h = conta.dentroCarencia72h
+  const isPendente = conta.statusEfetivo === 'ativo_aguardando_pagamento'
   const horas = conta.horasRestantesCarencia ?? 72
 
   const handleDismiss = () => {
@@ -2671,6 +2677,29 @@ function PreVencimentoPopup({ conta }: { conta: ContaData }) {
               )}
               <p className="text-[11px] text-gray-500 mb-4">
                 Após as {horas}h, se o pagamento não for confirmado, o sistema será suspenso.
+              </p>
+            </>
+          ) : isPendente ? (
+            <>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">
+                Pagamento Pendente — Confirmação Necessária
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Sua forma de pagamento foi recebida e está sendo analisada.
+                Aguarde a confirmação do administrador.
+              </p>
+              {conta.formaPagamento && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-blue-800 font-medium">
+                    ✓ Forma escolhida: {conta.formaPagamento === 'pix' ? 'Pix' : conta.formaPagamento === 'cartao_mensal' ? 'Cartão (Mensal)' : conta.formaPagamento === 'cartao_recorrente' ? 'Cartão (Recorrente)' : 'Boleto'}
+                  </p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Continue usando o sistema normalmente. Você será notificado quando o pagamento for confirmado.
+                  </p>
+                </div>
+              )}
+              <p className="text-[11px] text-gray-500 mb-4">
+                Em caso de dúvidas, contate: notifications@panfletosbrasil.odoo.com
               </p>
             </>
           ) : (
