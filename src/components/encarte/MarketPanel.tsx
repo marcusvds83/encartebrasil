@@ -1240,20 +1240,19 @@ function Dashboard({ conta, onLogout }: { conta: ContaData; onLogout: () => void
   const isAguardando72h = conta.statusEfetivo === 'aguardando_confirmacao_72h'
   const isAtivo = conta.status === 'ativo'
 
-  // ── Tela de bloqueio quando piloto/teste grátis expira, pagamento vencido, aguardando pagamento ou assinatura cancelada ──
+  // ── Tela de bloqueio quando piloto/teste grátis expira SEM carência,
+  // pagamento vencido SEM carência, aguardando pagamento ou assinatura cancelada ──
+  // IMPORTANTE: isAguardando72h NÃO bloqueia — a empresa pode continuar usando
+  // durante os 3 dias de carência, apenas vê o popup (fechável)
   if (isPilotoExpirado || isAguardandoPagamento || isAssinaturaCancelada || isPagamentoVencido) {
-    return <PaymentBlockScreen conta={conta} />
-  }
-
-  // ── Tela de carência 72h (escolheu pagamento mas aguarda confirmação) ──
-  if (isAguardando72h) {
     return <PaymentBlockScreen conta={conta} />
   }
 
   return (
     <div className="space-y-6">
-      {/* ── Popup D-3: aviso fechável 3 dias antes do vencimento ── */}
-      {conta.dentroJanelaAviso && !isAguardando72h && (
+      {/* ── Popup D-3: aviso fechável (3 dias antes do vencimento OU durante carência 72h) ── */}
+      {/* Durante carência 72h, popup mostra horas restantes — empresa pode fechar e continuar usando */}
+      {conta.dentroJanelaAviso && (
         <PreVencimentoPopup conta={conta} />
       )}
 
@@ -2615,7 +2614,7 @@ function PreVencimentoPopup({ conta }: { conta: ContaData }) {
     const last = localStorage.getItem(storageKey)
     if (last) {
       const elapsed = Date.now() - parseInt(last, 10)
-      // Reaparece após 1h ou em novo login (se passou mais de 12h)
+      // Reaparece após 1h (para empresa ver novamente) ou em novo login
       if (elapsed < 60 * 60 * 1000) {
         setDismissed(true)
       }
@@ -2627,6 +2626,8 @@ function PreVencimentoPopup({ conta }: { conta: ContaData }) {
   const dias = conta.diasParaVencer ?? 0
   const isPiloto = conta.status === 'piloto' || conta.status === 'teste_gratis'
   const tipoLabel = conta.status === 'teste_gratis' ? 'teste grátis' : isPiloto ? 'piloto' : 'assinatura'
+  const isCarencia72h = conta.dentroCarencia72h
+  const horas = conta.horasRestantesCarencia ?? 72
 
   const handleDismiss = () => {
     localStorage.setItem(storageKey, Date.now().toString())
@@ -2649,28 +2650,55 @@ function PreVencimentoPopup({ conta }: { conta: ContaData }) {
             <Clock className="h-7 w-7 text-orange-600" />
           </div>
 
-          <h3 className="text-lg font-bold text-gray-900 mb-2">
-            {dias === 0 ? 'Seu ' + tipoLabel + ' vence hoje!' : `Faltam ${dias} dia${dias !== 1 ? 's' : ''} para o vencimento`}
-          </h3>
-
-          <p className="text-sm text-gray-600 mb-4">
-            {isPiloto
-              ? `Seu período de ${tipoLabel} termina em ${dias === 0 ? 'hoje' : `${dias} dia${dias !== 1 ? 's' : ''}`}. `
-              : `Sua assinatura mensal vence em ${dias === 0 ? 'hoje' : `${dias} dia${dias !== 1 ? 's' : ''}`}. `}
-            Escolha sua forma de pagamento para continuar usando o app sem interrupção.
-          </p>
-
-          {conta.formaPagamento ? (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-              <p className="text-sm text-green-800 font-medium">
-                ✓ Você já escolheu: {conta.formaPagamento === 'pix' ? 'Pix' : conta.formaPagamento === 'cartao_mensal' ? 'Cartão (Mensal)' : conta.formaPagamento === 'cartao_recorrente' ? 'Cartão (Recorrente)' : 'Boleto'}
+          {isCarencia72h ? (
+            <>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">
+                Pagamento em análise — {horas}h restantes
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Você escolheu sua forma de pagamento. Aguarde a confirmação.
+                Você tem <strong>{horas} horas</strong> para o pagamento ser confirmado.
               </p>
-              <p className="text-xs text-green-700 mt-1">Aguarde a confirmação do pagamento.</p>
-            </div>
+              {conta.formaPagamento && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-green-800 font-medium">
+                    ✓ Forma escolhida: {conta.formaPagamento === 'pix' ? 'Pix' : conta.formaPagamento === 'cartao_mensal' ? 'Cartão (Mensal)' : conta.formaPagamento === 'cartao_recorrente' ? 'Cartão (Recorrente)' : 'Boleto'}
+                  </p>
+                  <p className="text-xs text-green-700 mt-1">
+                    Continue usando o sistema normalmente. O pagamento está sendo processado.
+                  </p>
+                </div>
+              )}
+              <p className="text-[11px] text-gray-500 mb-4">
+                Após as {horas}h, se o pagamento não for confirmado, o sistema será suspenso.
+              </p>
+            </>
           ) : (
-            <p className="text-xs text-gray-500 mb-4">
-              Após o vencimento, você terá 3 dias (72h) de carência após escolher o pagamento.
-            </p>
+            <>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">
+                {dias <= 0 ? 'Seu ' + tipoLabel + ' vence hoje!' : `Faltam ${dias} dia${dias !== 1 ? 's' : ''} para o vencimento`}
+              </h3>
+
+              <p className="text-sm text-gray-600 mb-4">
+                {isPiloto
+                  ? `Seu período de ${tipoLabel} termina em ${dias <= 0 ? 'hoje' : `${dias} dia${dias !== 1 ? 's' : ''}`}. `
+                  : `Sua assinatura mensal vence em ${dias <= 0 ? 'hoje' : `${dias} dia${dias !== 1 ? 's' : ''}`}. `}
+                Escolha sua forma de pagamento para continuar usando o app sem interrupção.
+              </p>
+
+              {conta.formaPagamento ? (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-green-800 font-medium">
+                    ✓ Você já escolheu: {conta.formaPagamento === 'pix' ? 'Pix' : conta.formaPagamento === 'cartao_mensal' ? 'Cartão (Mensal)' : conta.formaPagamento === 'cartao_recorrente' ? 'Cartão (Recorrente)' : 'Boleto'}
+                  </p>
+                  <p className="text-xs text-green-700 mt-1">Aguarde a confirmação do pagamento.</p>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 mb-4">
+                  Após o vencimento, você terá 3 dias (72h) de carência após escolher o pagamento.
+                </p>
+              )}
+            </>
           )}
 
           <button
