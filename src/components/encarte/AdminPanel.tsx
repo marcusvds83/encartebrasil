@@ -20,6 +20,7 @@ import {
   Clock,
   Mail,
   AlertCircle,
+  Download,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1029,6 +1030,39 @@ export default function AdminPanel({ onLogout, onLogin, sessionOverride }: Admin
             Sair
           </Button>
         </div>
+      </div>
+
+      {/* Exportar CSV */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold text-gray-600">Exportar:</span>
+        <a
+          href="/api/admin/mercados/exportar-csv?filtro=sem_pagamento"
+          className="inline-flex items-center gap-1.5 text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Sem Pagamento
+        </a>
+        <a
+          href="/api/admin/mercados/exportar-csv?filtro=vencidos"
+          className="inline-flex items-center gap-1.5 text-xs bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Vencidos
+        </a>
+        <a
+          href="/api/admin/mercados/exportar-csv?filtro=pendentes"
+          className="inline-flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Pendentes
+        </a>
+        <a
+          href="/api/admin/mercados/exportar-csv?filtro=todos"
+          className="inline-flex items-center gap-1.5 text-xs bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Todos
+        </a>
       </div>
 
       {/* Stats row — KPIs dinâmicos baseados nos filtros */}
