@@ -168,9 +168,9 @@ export function calcularStatusEfetivo(
   }
 
   // 5. Janela de aviso D-3 (apenas se NÃO for cartão recorrente)
+  // Mostra aviso quando faltam 3 dias OU quando já venceu mas está em carência 72h
   if (
     diasParaVencer !== null &&
-    diasParaVencer >= 0 &&
     diasParaVencer <= DIAS_AVISO_PRE_VENC &&
     mercado.formaPagamento !== 'cartao_recorrente'
   ) {
@@ -178,7 +178,8 @@ export function calcularStatusEfetivo(
     if (
       statusEfetivo === 'piloto' ||
       statusEfetivo === 'teste_gratis' ||
-      (statusEfetivo === 'ativo' && !!mercado.dataProximoPagamento)
+      (statusEfetivo === 'ativo' && !!mercado.dataProximoPagamento) ||
+      statusEfetivo === 'aguardando_confirmacao_72h'
     ) {
       dentroJanelaAviso = true
     }

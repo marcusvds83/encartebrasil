@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ShieldCheck,
@@ -19,6 +19,7 @@ import {
   UserX,
   Clock,
   Mail,
+  AlertCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,6 +74,10 @@ interface AdminMercado {
   criadoEm: string
   formaPagamento?: string | null
   ultimoPagamento?: string | null
+  segmento?: string | null
+  pilotoFim?: string | null
+  dataProximoPagamento?: string | null
+  statusPagamento?: string | null
   _count: {
     produtos: number
     encartes: number
@@ -485,6 +490,29 @@ function MarketRow({
   const nextStatus = nextStatusAction(m.status)
   const nextLabel = nextStatusLabel(m.status)
 
+  // ── Status de pagamento (Pago/Pendente/Cancelado) ──
+  const statusPagamentoAtual = m.statusPagamento || (
+    m.status === 'ativo' ? 'pago' :
+    m.status === 'ativo_aguardando_pagamento' ? 'pendente' :
+    m.status === 'inativo' ? 'cancelado' : 'pendente'
+  )
+
+  const changePagamentoStatus = async (novoStatus: 'pago' | 'pendente' | 'cancelado') => {
+    setActionLoading(`pgto-${m.id}-${novoStatus}`)
+    try {
+      await api(`/api/admin/mercado/${m.id}/pagamento-status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ statusPagamento: novoStatus }),
+      })
+      toast.success(`Pagamento marcado como "${novoStatus}"`)
+      onRefresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao alterar status de pagamento')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   return (
     <motion.div
       layout
@@ -590,6 +618,85 @@ function MarketRow({
                 }[m.formaPagamento] ?? m.formaPagamento}
               </Badge>
             )}
+
+            {/* Status de pagamento (badge) + botões Pago/Pendente/Cancelado */}
+            <div className="flex items-center gap-1 ml-auto">
+              {/* Badge atual */}
+              <Badge
+                variant="outline"
+                className={cn(
+                  'text-[10px] h-6 font-normal',
+                  statusPagamentoAtual === 'pago' && 'border-green-200 text-green-700 bg-green-50',
+                  statusPagamentoAtual === 'pendente' && 'border-orange-200 text-orange-700 bg-orange-50',
+                  statusPagamentoAtual === 'cancelado' && 'border-red-200 text-red-700 bg-red-50',
+                )}
+              >
+                {statusPagamentoAtual === 'pago' ? '✓ Pago' : statusPagamentoAtual === 'pendente' ? '⏳ Pendente' : '✗ Cancelado'}
+              </Badge>
+
+              {/* Botão Pago */}
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  'text-[10px] h-6 px-2',
+                  statusPagamentoAtual === 'pago'
+                    ? 'border-green-300 bg-green-100 text-green-700'
+                    : 'border-green-200 text-green-600 hover:bg-green-50',
+                )}
+                disabled={!!actionLoading || statusPagamentoAtual === 'pago'}
+                onClick={() => changePagamentoStatus('pago')}
+                title="Marcar como Pago"
+              >
+                {actionLoading === `pgto-${m.id}-pago` ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  '✓'
+                )}
+              </Button>
+
+              {/* Botão Pendente */}
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  'text-[10px] h-6 px-2',
+                  statusPagamentoAtual === 'pendente'
+                    ? 'border-orange-300 bg-orange-100 text-orange-700'
+                    : 'border-orange-200 text-orange-600 hover:bg-orange-50',
+                )}
+                disabled={!!actionLoading || statusPagamentoAtual === 'pendente'}
+                onClick={() => changePagamentoStatus('pendente')}
+                title="Marcar como Pendente"
+              >
+                {actionLoading === `pgto-${m.id}-pendente` ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  '⏳'
+                )}
+              </Button>
+
+              {/* Botão Cancelado */}
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  'text-[10px] h-6 px-2',
+                  statusPagamentoAtual === 'cancelado'
+                    ? 'border-red-300 bg-red-100 text-red-700'
+                    : 'border-red-200 text-red-600 hover:bg-red-50',
+                )}
+                disabled={!!actionLoading || statusPagamentoAtual === 'cancelado'}
+                onClick={() => changePagamentoStatus('cancelado')}
+                title="Marcar como Cancelado"
+              >
+                {actionLoading === `pgto-${m.id}-cancelado` ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  '✗'
+                )}
+              </Button>
+            </div>
 
             {/* Contrato button - aparece quando ativo ou piloto */}
             {(m.status === 'ativo' || m.status === 'piloto') && (
@@ -725,12 +832,56 @@ interface AdminPanelProps {
 
 export default function AdminPanel({ onLogout, onLogin, sessionOverride }: AdminPanelProps) {
   const ctxSession = useSession()
-  // Se recebeu sessionOverride (do AdminRoute), usa ele; senão usa o do contexto
   const session = sessionOverride || ctxSession
   const [mercados, setMercados] = useState<AdminMercado[]>([])
   const [dataFetched, setDataFetched] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const loading = session?.tipo === 'admin' ? !dataFetched : false
+
+  // ── Filtros ──
+  const [filtroSegmento, setFiltroSegmento] = useState<string>('todos')
+  const [filtroStatusPagamento, setFiltroStatusPagamento] = useState<string>('todos')
+
+  // ── Mercados filtrados (por segmento + status de pagamento) ──
+  const mercadosFiltrados = useMemo(() => {
+    let list = mercados
+    if (filtroSegmento !== 'todos') {
+      list = list.filter((m) => (m.segmento || 'mercados') === filtroSegmento)
+    }
+    if (filtroStatusPagamento !== 'todos') {
+      list = list.filter((m) => {
+        const sp = m.statusPagamento || (m.status === 'ativo' ? 'pago' : m.status === 'ativo_aguardando_pagamento' ? 'pendente' : 'cancelado')
+        return sp === filtroStatusPagamento
+      })
+    }
+    return list
+  }, [mercados, filtroSegmento, filtroStatusPagamento])
+
+  // ── KPIs dinâmicos (baseados nos filtros) ──
+  const kpis = useMemo(() => {
+    const list = mercadosFiltrados
+    const total = list.length
+    const pagos = list.filter((m) => (m.statusPagamento || (m.status === 'ativo' ? 'pago' : '')) === 'pago').length
+    const pendentes = list.filter((m) => {
+      const sp = m.statusPagamento || (m.status === 'ativo_aguardando_pagamento' ? 'pendente' : '')
+      return sp === 'pendente'
+    }).length
+    const cancelados = list.filter((m) => (m.statusPagamento || (m.status === 'inativo' ? 'cancelado' : '')) === 'cancelado').length
+    const emPiloto = list.filter((m) => m.status === 'piloto' || m.status === 'teste_gratis').length
+    const ativos = list.filter((m) => m.status === 'ativo').length
+    const receitaPotencial = list
+      .filter((m) => m.status === 'ativo' || m.status === 'piloto' || m.status === 'teste_gratis')
+      .reduce((sum, m) => sum + (m.mensalidade || 0), 0)
+
+    return { total, pagos, pendentes, cancelados, emPiloto, ativos, receitaPotencial }
+  }, [mercadosFiltrados])
+
+  // ── Segmentos disponíveis (para o filtro) ──
+  const segmentosDisponiveis = useMemo(() => {
+    const set = new Set<string>()
+    mercados.forEach((m) => set.add(m.segmento || 'mercados'))
+    return Array.from(set).sort()
+  }, [mercados])
 
   const fetchMercados = useCallback(async () => {
     try {
@@ -880,9 +1031,16 @@ export default function AdminPanel({ onLogout, onLogin, sessionOverride }: Admin
         </div>
       </div>
 
-      {/* Stats row */}
+      {/* Stats row — KPIs dinâmicos baseados nos filtros */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {stats.map((s, i) => (
+        {[
+          { label: 'Total', value: kpis.total, icon: <Store className="h-5 w-5" />, color: 'text-gray-700 bg-gray-100' },
+          { label: 'Em Piloto', value: kpis.emPiloto, icon: <Clock className="h-5 w-5" />, color: 'text-blue-600 bg-blue-50' },
+          { label: 'Ativos', value: kpis.ativos, icon: <UserCheck className="h-5 w-5" />, color: 'text-red-600 bg-orange-50' },
+          { label: 'Pagos', value: kpis.pagos, icon: <DollarSign className="h-5 w-5" />, color: 'text-green-600 bg-green-50' },
+          { label: 'Pendentes', value: kpis.pendentes, icon: <AlertCircle className="h-5 w-5" />, color: 'text-orange-600 bg-orange-50' },
+          { label: 'Receita Potencial', value: formatBRL(kpis.receitaPotencial), icon: <DollarSign className="h-5 w-5" />, color: 'text-red-600 bg-orange-50' },
+        ].map((s, i) => (
           <motion.div
             key={s.label}
             initial={{ opacity: 0, y: 8 }}
@@ -891,9 +1049,7 @@ export default function AdminPanel({ onLogout, onLogin, sessionOverride }: Admin
           >
             <Card className="border-gray-100">
               <CardContent className="p-3">
-                <div
-                  className={cn('p-1.5 rounded-lg w-fit mb-2', s.color)}
-                >
+                <div className={cn('p-1.5 rounded-lg w-fit mb-2', s.color)}>
                   {s.icon}
                 </div>
                 <p className="text-xl font-bold text-gray-800">{s.value}</p>
@@ -904,28 +1060,69 @@ export default function AdminPanel({ onLogout, onLogin, sessionOverride }: Admin
         ))}
       </div>
 
+      {/* Filtros */}
+      <div className="flex flex-wrap items-center gap-3 p-3 bg-gray-50 rounded-lg">
+        <span className="text-xs font-semibold text-gray-600">Filtros:</span>
+
+        {/* Filtro por segmento */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-gray-500">Segmento:</span>
+          <select
+            value={filtroSegmento}
+            onChange={(e) => setFiltroSegmento(e.target.value)}
+            className="text-xs h-8 px-2 rounded border border-gray-200 bg-white outline-none focus:border-red-400"
+          >
+            <option value="todos">Todos</option>
+            {segmentosDisponiveis.map((s) => (
+              <option key={s} value={s}>
+                {s === 'mercados' ? 'Mercados' : s === 'petshops' ? 'PetShops' : s === 'farmacias' ? 'Farmácias' : s}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Filtro por status de pagamento */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-gray-500">Pagamento:</span>
+          <select
+            value={filtroStatusPagamento}
+            onChange={(e) => setFiltroStatusPagamento(e.target.value)}
+            className="text-xs h-8 px-2 rounded border border-gray-200 bg-white outline-none focus:border-red-400"
+          >
+            <option value="todos">Todos</option>
+            <option value="pago">Pagos</option>
+            <option value="pendente">Pendentes</option>
+            <option value="cancelado">Cancelados</option>
+          </select>
+        </div>
+
+        <span className="text-[11px] text-gray-500 ml-auto">
+          {mercadosFiltrados.length} de {mercados.length} empresas
+        </span>
+      </div>
+
       {/* New market */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-700">
-          Mercados Cadastrados
+          Empresas ({mercadosFiltrados.length})
         </h3>
         <NewMarketForm onCreated={fetchMercados} />
       </div>
 
-      {/* Markets list */}
-      <div className="space-y-3 max-h-[calc(100vh-400px)] overflow-y-auto pr-1">
+      {/* Markets list (filtrada) */}
+      <div className="space-y-3 max-h-[calc(100vh-520px)] overflow-y-auto pr-1">
         <AnimatePresence>
-          {mercados.length === 0 ? (
+          {mercadosFiltrados.length === 0 ? (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="text-center py-12 text-gray-400"
             >
               <Store className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p className="text-sm">Nenhum mercado cadastrado</p>
+              <p className="text-sm">Nenhuma empresa encontrada com os filtros selecionados</p>
             </motion.div>
           ) : (
-            mercados.map((m) => (
+            mercadosFiltrados.map((m) => (
               <MarketRow
                 key={m.id}
                 m={m}
