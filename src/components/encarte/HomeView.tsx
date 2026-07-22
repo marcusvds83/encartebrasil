@@ -455,15 +455,24 @@ function MarketDetailView({
                       {detail.nome} — Catálogo
                     </p>
                     <p className="text-xs text-gray-400 mb-4">
-                      Toque para visualizar o catálogo completo
+                      {detail.encartes.filter((e) => e.pdfPath).length > 1
+                        ? `${detail.encartes.filter((e) => e.pdfPath).length} encartes disponíveis`
+                        : 'Toque para visualizar o catálogo completo'}
                     </p>
-                    <a
-                      href={`/pdf-viewer?id=${detail.encartes.find((e) => e.pdfPath)?.id || ''}`}
-                      className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-6 py-3 rounded-lg"
-                    >
-                      <FileText className="h-4 w-4" />
-                      Abrir Catálogo
-                    </a>
+                    {(() => {
+                      const pdfEncartes = detail.encartes.filter((e) => e.pdfPath)
+                      const firstId = pdfEncartes[0]?.id || ''
+                      const allIds = pdfEncartes.map((e) => e.id).join(',')
+                      return (
+                        <a
+                          href={`/pdf-viewer?id=${firstId}&ids=${allIds}`}
+                          className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-6 py-3 rounded-lg"
+                        >
+                          <FileText className="h-4 w-4" />
+                          Abrir Catálogo
+                        </a>
+                      )
+                    })()}
                   </div>
                 </div>
 
