@@ -80,19 +80,27 @@ export default function MyListView({ sessionId }: MyListViewProps) {
   // Fetch list
   const fetchList = useCallback(async () => {
     try {
+      if (!sessionId || sessionId === 'server') {
+        setError('Sessão não encontrada. Faça login novamente.')
+        setLoading(false)
+        return
+      }
       const data = await api<ListaItem[]>(
         `/api/lista?sessionId=${encodeURIComponent(sessionId)}`,
       )
-      setItems(data)
+      // Garante que data é um array
+      const items = Array.isArray(data) ? data : []
+      setItems(items)
       // Initialize quantities
       const q: Record<string, number> = {}
-      for (const item of data) {
-        q[item.id] = 1
+      for (const item of items) {
+        if (item && item.id) q[item.id] = 1
       }
       setQty(q)
       setError(null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao carregar')
+      console.error('[MyListView] erro ao carregar:', e)
+      setError(e instanceof Error ? e.message : 'Erro ao carregar lista')
     } finally {
       setLoading(false)
     }
@@ -104,8 +112,10 @@ export default function MyListView({ sessionId }: MyListViewProps) {
 
   // Group by mercadoNome, coleta cidades únicas por grupo
   const grouped = useMemo(() => {
+    if (!items || !Array.isArray(items)) return {}
     const groups: Record<string, { items: ListaItem[]; cidades: Set<string> }> = {}
     for (const item of items) {
+      if (!item || !item.id) continue
       const key = item.mercadoNome || 'Outros'
       if (!groups[key]) groups[key] = { items: [], cidades: new Set() }
       groups[key].items.push(item)
@@ -116,11 +126,11 @@ export default function MyListView({ sessionId }: MyListViewProps) {
 
   // Estimated total (only unchecked items)
   const estimatedTotal = useMemo(() => {
+    if (!items || !Array.isArray(items)) return 0
     let total = 0
     for (const item of items) {
-      if (!item.checked) {
-        total += parsePreco(item.preco) * (qty[item.id] || 1)
-      }
+      if (!item || item.checked) continue
+      total += parsePreco(item.preco) * (qty[item.id] || 1)
     }
     return total
   }, [items, qty])
@@ -128,14 +138,13 @@ export default function MyListView({ sessionId }: MyListViewProps) {
   // Toggle check
   const toggleCheck = useCallback(
     async (id: string) => {
+      if (!id) return
       const prev = [...items]
       setItems((list) =>
-        list.map((i) => (i.id === id ? { ...i, checked: !i.checked } : i)),
+        (list || []).map((i) => (i.id === id ? { ...i, checked: !i.checked } : i)),
       )
       try {
-        await api(`/api/lista?id=${encodeURIComponent(id)}`, {
-          method: 'PUT',
-        })
+        await api(`/api/lista?id=${encodeURIComponent(id)}`, { method: 'PUT' })
       } catch {
         setItems(prev)
         toast.error('Erro ao atualizar item')
@@ -147,17 +156,16 @@ export default function MyListView({ sessionId }: MyListViewProps) {
   // Delete item
   const deleteItem = useCallback(
     async (id: string) => {
+      if (!id) return
       const prev = [...items]
-      setItems((list) => list.filter((i) => i.id !== id))
+      setItems((list) => (list || []).filter((i) => i.id !== id))
       setQty((q) => {
         const next = { ...q }
         delete next[id]
         return next
       })
       try {
-        await api(`/api/lista?id=${encodeURIComponent(id)}`, {
-          method: 'DELETE',
-        })
+        await api(`/api/lista?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
         toast.success('Item removido')
       } catch {
         setItems(prev)
@@ -169,12 +177,11 @@ export default function MyListView({ sessionId }: MyListViewProps) {
 
   // Clear all
   const clearAll = useCallback(async () => {
+    if (!items || items.length === 0) return
     try {
       await Promise.all(
         items.map((i) =>
-          api(`/api/lista?id=${encodeURIComponent(i.id)}`, {
-            method: 'DELETE',
-          }),
+          api(`/api/lista?id=${encodeURIComponent(i.id)}`, { method: 'DELETE' }),
         ),
       )
       setItems([])
