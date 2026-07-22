@@ -2,12 +2,71 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 /**
+ * Normalização agressiva de nome de produto para comparação.
+ *
+ * Remove: acentos, maiúsculas, espaços extras, pontuação
+ * Remove conectivos: de, da, do, das, dos, e, com, sem, para, a, o
+ * Padroniza unidades: litros→l, quilos→kg, gramas→g, mililitros→ml
+ * Remove unidades isoladas: kg, g, ml, l, un, cx
+ * Remove espaços completamente
+ *
+ * Exemplos:
+ *   "Bandeja de 30 Ovos"     → "30ovos"
+ *   "Bandeja 30 ovos"        → "30ovos"
+ *   "Arroz Tipo 1 5kg"       → "arroz1"
+ *   "Arroz tipo 1 - 5 kg"    → "arroz1"
+ *   "Coca-Cola 2L"           → "cocacola2"
+ *   "Coca Cola 2 litros"     → "cocacola2"
+ */
+function normalizarNomeParaComparacao(nome: string): string {
+  if (!nome) return ''
+
+  let result = nome
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+
+  // Remove pontuação
+  result = result.replace(/[.,\-_()[\]/\\:;'"!@#$%&*+=<>?]/g, ' ')
+
+  // Padroniza unidades antes de remover espaços
+  result = result.replace(/\b(litros|litro)\b/g, 'l')
+  result = result.replace(/\b(quilos|quilo)\b/g, 'kg')
+  result = result.replace(/\b(gramas|grama)\b/g, 'g')
+  result = result.replace(/\b(mililitros|mililitro)\b/g, 'ml')
+  result = result.replace(/\b(unidades|unidade)\b/g, 'un')
+  result = result.replace(/\b(caixas|caixa)\b/g, 'cx')
+  result = result.replace(/\b(pacotes|pacote)\b/g, 'pct')
+  result = result.replace(/\b(duzias|duzia)\b/g, 'dz')
+
+  // Remove conectivos
+  const conectivos = [
+    'de', 'da', 'do', 'das', 'dos', 'e', 'com', 'sem', 'para', 'pa',
+    'a', 'o', 'as', 'os', 'em', 'na', 'no', 'nas', 'nos', 'por', 'p',
+    'ou', 'tipo',
+  ]
+  const palavras = result.split(/\s+/).filter(p => p.length > 0)
+  const palavrasFiltradas = palavras.filter(p => !conectivos.includes(p))
+
+  result = palavrasFiltradas.join(' ')
+
+  // Remove unidades isoladas (agora padronizadas)
+  result = result.replace(/\b(kg|g|ml|l|un|cx|pct|dz)\b/g, '')
+
+  // Remove espaços completamente
+  result = result.replace(/\s+/g, '')
+
+  return result
+}
+
+/**
  * GET /api/comparar
  *
  * Compara preços de produtos entre mercados.
  *
  * Regras:
- * - Só compara produtos com o MESMO nome normalizado
+ * - Só compara produtos com o MESMO nome normalizado (agressivo)
  * - Produtos devem ser de mercados DIFERENTES (pelo menos 2)
  * - Se ?cidade=X for passado, filtra só mercados dessa cidade
  * - Ordena por menor preço primeiro
@@ -56,16 +115,10 @@ export async function GET(req: NextRequest) {
     })
     console.log(`[comparar] Produtos com preço válido: ${produtosFiltrados.length}`)
 
-    // Agrupa por nome normalizado
+    // Agrupa por nome normalizado (agressivo)
     const grouped: Record<string, any> = {}
     for (const p of produtosFiltrados as any[]) {
-      // Normaliza nome: lowercase, sem acento, sem espaços extras
-      const nomeNormalizado = (p.normalizado || p.nome || '')
-        .toLowerCase()
-        .trim()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '') // remove acentos
-        .replace(/\s+/g, ' ')
+      const nomeNormalizado = normalizarNomeParaComparacao(p.normalizado || p.nome || '')
 
       if (!nomeNormalizado || nomeNormalizado.length < 2) continue
 
@@ -95,7 +148,7 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    console.log(`[comparar] Grupos de produtos (nomes únicos): ${Object.keys(grouped).length}`)
+    console.log(`[comparar] Grupos de produtos (nomes únicos normalizados): ${Object.keys(grouped).length}`)
 
     // Só mantém grupos com 2+ mercados diferentes
     const comparacoes = Object.values(grouped)
