@@ -30,6 +30,7 @@ import AdminPanel from './AdminPanel'
 import UserProfile from './UserProfile'
 import MarketAccountView from './MarketAccountView'
 import TermosDeUso from './TermosDeUso'
+import LocalErrorBoundary from './LocalErrorBoundary'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -258,29 +259,52 @@ export default function AppShell() {
   const visibleTabs = TABS.filter((t) => t.showWhen(session))
 
   // ── View renderer ──────────────────────────────────────────────────────
+  // Cada view é envolvida por LocalErrorBoundary para que um crash em uma view
+  // NÃO desmonte o AppShell inteiro (o que perderia a sessão em memória).
+  // O boundary mostra UI amigável inline e permite "Tentar novamente" só na view.
   const renderView = (t: TabId) => {
     switch (t) {
       case 'home':
         return (
-          <HomeView
-            sessionId={sessionId}
-            onAddToList={handleAddToList}
-          />
+          <LocalErrorBoundary fallbackMessage="Não foi possível carregar o início">
+            <HomeView
+              sessionId={sessionId}
+              onAddToList={handleAddToList}
+            />
+          </LocalErrorBoundary>
         )
       case 'comparar':
-        return <CompareView sessionId={sessionId} onAddToList={handleAddToList} />
+        return (
+          <LocalErrorBoundary fallbackMessage="Não foi possível carregar a comparação">
+            <CompareView sessionId={sessionId} onAddToList={handleAddToList} />
+          </LocalErrorBoundary>
+        )
       case 'lista':
-        return <MyListView sessionId={sessionId} refreshKey={listaRefreshKey} />
+        return (
+          <LocalErrorBoundary fallbackMessage="Não foi possível carregar sua lista">
+            <MyListView sessionId={sessionId} refreshKey={listaRefreshKey} />
+          </LocalErrorBoundary>
+        )
       case 'mercado':
-        return <MarketPanel onLogout={handleLogout} onLogin={checkAuth} />
+        return (
+          <LocalErrorBoundary fallbackMessage="Não foi possível carregar o painel">
+            <MarketPanel onLogout={handleLogout} onLogin={checkAuth} />
+          </LocalErrorBoundary>
+        )
       case 'conta':
-        return <UserProfile onLogout={handleLogout} />
+        return (
+          <LocalErrorBoundary fallbackMessage="Não foi possível carregar sua conta">
+            <UserProfile onLogout={handleLogout} />
+          </LocalErrorBoundary>
+        )
       default:
         return (
-          <HomeView
-            sessionId={sessionId}
-            onAddToList={handleAddToList}
-          />
+          <LocalErrorBoundary fallbackMessage="Não foi possível carregar o início">
+            <HomeView
+              sessionId={sessionId}
+              onAddToList={handleAddToList}
+            />
+          </LocalErrorBoundary>
         )
     }
   }

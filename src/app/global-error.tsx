@@ -2,8 +2,11 @@
 
 /**
  * Error Boundary Global — captura erros de cliente antes de mostrar tela branca.
- * Em vez de "Application error: a client-side exception", mostra uma tela amigável
- * com botão de recarregar.
+ * Em vez de "Application error: a client-side exception", mostra uma tela amigável.
+ *
+ * IMPORTANTE: "Tentar novamente" usa window.location.reload() para preservar a
+ * sessão (cookie httpOnly). Usar apenas reset() em erros globais pode remontar
+ * o AppShell e perder a sessão em memória.
  */
 export default function GlobalError({
   error,
@@ -12,6 +15,19 @@ export default function GlobalError({
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  const handleTentarNovamente = () => {
+    try {
+      reset()
+    } catch {
+      /* ignora */
+    }
+    setTimeout(() => {
+      if (typeof window !== 'undefined') {
+        window.location.reload()
+      }
+    }, 100)
+  }
+
   return (
     <html>
       <body>
@@ -44,13 +60,13 @@ export default function GlobalError({
             Ops! Algo deu errado
           </h2>
           <p style={{ color: '#666', fontSize: '14px', maxWidth: '350px', marginBottom: '20px' }}>
-            Ocorreu um erro ao carregar esta página. Tente recarregar.
+            Ocorreu um erro ao carregar esta página. Tente recarregar — sua sessão será mantida.
           </p>
           <p style={{ color: '#999', fontSize: '11px', marginBottom: '20px', maxWidth: '350px', wordBreak: 'break-word' }}>
             {error?.message || 'Erro desconhecido'}
           </p>
           <button
-            onClick={() => reset()}
+            onClick={handleTentarNovamente}
             style={{
               background: '#DC2626',
               color: 'white',
@@ -65,15 +81,22 @@ export default function GlobalError({
             Tentar novamente
           </button>
           <a
-            href="/"
+            href="#"
+            onClick={(e) => {
+              e.preventDefault()
+              if (typeof window !== 'undefined') {
+                window.location.reload()
+              }
+            }}
             style={{
               marginTop: '12px',
               color: '#DC2626',
               fontSize: '12px',
               textDecoration: 'underline',
+              cursor: 'pointer',
             }}
           >
-            Voltar ao início
+            Recarregar página
           </a>
         </div>
       </body>
